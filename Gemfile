@@ -5,9 +5,6 @@ ruby "3.2.0"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 7.1.0"
 
-# rspec
-gem 'rspec-rails', '~> 7.1'
-
 # rubocop
 gem 'rubocop', '~> 1.20'
 gem 'rubocop-rails', '~> 2.0'
@@ -54,6 +51,11 @@ gem "bootsnap", require: false
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ]
+
+  # rspec
+  gem 'rspec-rails', '~> 7.1'
+  gem "factory_bot_rails", "~> 6.4" 
+  gem "faker", "~> 3.5"
 end
 
 group :development do
@@ -68,3 +70,16 @@ group :development do
 
 end
 
+group :test do 
+  # database cleaner  
+  gem "database_cleaner-active_record", "~> 2.2"
+
+  # shoulda matchers
+  gem "shoulda-matchers", "~> 6.4"
+
+  # simplecov
+  gem "simplecov", "~> 0.22.0",  :require => false
+
+  # simplecov json formatter
+  gem "simplecov_json_formatter", "~> 0.1.4", :require => false
+end
