@@ -68,3 +68,9 @@ group :development do
 
 end
 
+
+gem "simplecov", "~> 0.22.0", :group => :test, :require => false
+
+gem "simplecov_json_formatter", "~> 0.1.4", :group => :test, :require => false
+
+gem "shoulda-matchers", "~> 6.4", :group => :test
