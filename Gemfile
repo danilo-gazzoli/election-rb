@@ -54,6 +54,8 @@ group :development, :test do
 
   # rspec
   gem 'rspec-rails', '~> 7.1'
+  gem "factory_bot_rails", "~> 6.4" 
+  gem "faker", "~> 3.5"
 end
 
 group :development do
@@ -68,11 +70,16 @@ group :development do
 
 end
 
+group :test do 
+  # database cleaner  
+  gem "database_cleaner-active_record", "~> 2.2"
 
-gem "simplecov", "~> 0.22.0", :group => :test, :require => false
+  # shoulda matchers
+  gem "shoulda-matchers", "~> 6.4"
 
-gem "simplecov_json_formatter", "~> 0.1.4", :group => :test, :require => false
+  # simplecov
+  gem "simplecov", "~> 0.22.0",  :require => false
 
-gem "shoulda-matchers", "~> 6.4", :group => :test
-
-gem "factory_bot_rails", "~> 6.4", :groups => [:development, :test]
+  # simplecov json formatter
+  gem "simplecov_json_formatter", "~> 0.1.4", :require => false
+end
