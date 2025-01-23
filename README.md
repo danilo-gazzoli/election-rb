@@ -33,7 +33,7 @@ The primary focus is on **transparency, security, and cost-efficiency**.
 ## Key Features
 
 #### 1. **Election Creation and Management**
-   - Title, dates, positions (with or without vice-candidates), number of seats, and status (draft, ongoing, closed).
+   - Title, dates, positions (with or without vice-candidates), number of seats, and status (draft, scheduled, ongoing, completed, canceled).
 #### 2. **Candidate and Party Registration**
    - Linking candidates to specific positions and optional parties.
 #### 3. **Ballot (Tablet) Configuration**
