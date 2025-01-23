@@ -10,11 +10,11 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_21_053014) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_23_190923) do
   create_table "elections", force: :cascade do |t|
     t.string "title"
     t.text "description"
-    t.integer "status"
+    t.integer "status", default: 0, null: false
     t.datetime "start_time"
     t.datetime "end_time"
     t.date "election_day"
