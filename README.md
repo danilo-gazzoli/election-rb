@@ -196,3 +196,4 @@ Contributions are welcome! Feel free to open issues to ask questions, suggest fe
 This project is licensed under the MIT License.
 
 You are free to use and adapt it, as long as you respect the license terms.
+
