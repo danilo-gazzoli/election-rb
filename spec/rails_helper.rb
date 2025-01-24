@@ -70,7 +70,7 @@ RSpec.configure do |config|
 
 
   # shoulda matchers config
-  Shoulda::Matchers.config do |config| 
+  Shoulda::Matchers.configure do |config| 
     config.integrate do |with| 
       with.library :rails
       with.test_framework :rspec
