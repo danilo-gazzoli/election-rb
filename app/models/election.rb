@@ -25,13 +25,13 @@ class Election < ApplicationRecord
   private
 
   def is_future_day
-    if election_day.presence? && election_day <= Date.today
+    if election_day.blank? && election_day <= Date.today
       erros.add(:election_day, "must be a future date")
     end
   end
 
   def is_future_time
-    if start_time.presence? && start_time < Time.now
+    if start_time.blank? && start_time < Time.now
       erros.add(:start_time, "must be the current time or in future")
     end
   end
