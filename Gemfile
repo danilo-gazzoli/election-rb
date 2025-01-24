@@ -76,10 +76,4 @@ group :test do
 
   # shoulda matchers
   gem "shoulda-matchers", "~> 6.4"
-
-  # simplecov
-  gem "simplecov", "~> 0.22.0",  :require => false
-
-  # simplecov json formatter
-  gem "simplecov_json_formatter", "~> 0.1.4", :require => false
 end
