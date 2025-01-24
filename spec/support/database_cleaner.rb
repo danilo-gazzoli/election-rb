@@ -4,9 +4,9 @@ RSpec.configure do |config|
     DatabaseCleaner.clean_with(:truncation)
   end
 
-  config.around(:each) do 
+  config.around(:each) do |example| 
     DatabaseCleaner.cleaning do 
-      exemple.run
+      example.run
     end
   end
 end
