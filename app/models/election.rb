@@ -15,7 +15,7 @@ class Election < ApplicationRecord
 
   # start and end time validation
   validates :start_time, presence: true
-  validates :end_time, presence: true, comparison:  { greather_than: :start_time }
+  validates :end_time, presence: true, comparison:  { greater_than: :start_time }
 
   # election day validation
   validates :election_day, presence: true
