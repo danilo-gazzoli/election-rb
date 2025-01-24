@@ -71,12 +71,6 @@ group :development do
 end
 
 group :test do 
-  # simplecov
-  gem "simplecov", "~> 0.22.0",  :require => false
-  
-  # simplecov json formatter
-  gem "simplecov-json", "~> 0.2.3", :require => false
-
   # database cleaner  
   gem "database_cleaner-active_record", "~> 2.2"
 
