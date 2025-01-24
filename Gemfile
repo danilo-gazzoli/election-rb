@@ -71,15 +71,15 @@ group :development do
 end
 
 group :test do 
+  # simplecov
+  gem "simplecov", "~> 0.22.0",  :require => false
+  
+  # simplecov json formatter
+  gem "simplecov-json", "~> 0.2.3", :require => false
+
   # database cleaner  
   gem "database_cleaner-active_record", "~> 2.2"
 
   # shoulda matchers
   gem "shoulda-matchers", "~> 6.4"
-
-  # simplecov
-  gem "simplecov", "~> 0.22.0",  :require => false
-
-  # simplecov json formatter
-  gem "simplecov_json_formatter", "~> 0.1.4", :require => false
 end
