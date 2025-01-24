@@ -11,7 +11,7 @@ class Election < ApplicationRecord
 
   # status validation
   enum status: { draft: 0, scheduled: 1, ongoing: 2, completed: 3, canceled: 4 }
-  validates :status, presence: true
+  validates :status, presence: true, inclusion: { in: statuses.keys }
 
   # start and end time validation
   validates :start_time, presence: true
