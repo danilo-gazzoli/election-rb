@@ -1,10 +1,37 @@
 require 'rails_helper'
 
 RSpec.describe "Elections", type: :request do 
+
+  let(:valid_params) do
+    { election: {
+        title: "Election - 2025", 
+        description: "Loremipsum", 
+        status: "draft",
+        start_time: 1.day.from_now,
+        end_time: 2.days.from_now,
+        election_day: Date.today + 7
+      }
+    }
+  end
+
+  let(:invalid_params) do 
+    { election: {
+      title: nil,
+      description: nil,
+      status: "",
+      start_time: "",
+      end_time: "",
+      election_day: ""
+      } 
+    }
+  end
+
   # GET /index
   describe "GET /elections" do 
+    let!(:election) { create(:election) }
+
     it "returns a list of elections" do 
-      get "/elections"
+      get "/elections/#{election.id}"
       expect(response).to have_http_status(:ok)
     end
   end
@@ -12,8 +39,10 @@ RSpec.describe "Elections", type: :request do
   # GET /show
   describe "GET /elections/:id" do 
     context "when election exists (ID valid)" do 
+      let!(:election) { create(:election) }
+
       it "return election details" do 
-        get "/elections/1"
+        get "/elections/#{election.id}"
         expect(response).to have_http_status(:ok)
       end
     end
@@ -38,13 +67,6 @@ RSpec.describe "Elections", type: :request do
   describe "POST /elections" do 
     context "with valid params" do 
       it "creates a new election and redirects" do 
-        valid_params = { election: { 
-          title: "Election - 2025", 
-          description: "Loremipsum", 
-          status: "draft", 
-          start_time: 1.day.from_now,
-          end_time: 2.days.from_now,
-          election_day: Date.today + 7 } }
         post "/elections", params: valid_params
         expect(response).to have_http_status(:found)
       end
@@ -52,13 +74,6 @@ RSpec.describe "Elections", type: :request do
 
     context "with invalid params" do 
       it "does not creates a new election, renders form with errors" do 
-        invalid_params = { election: { 
-          title: nil, 
-          description: nil,
-          status: "", 
-          start_time: "",
-          end_time: "",
-          election_day: "" } }
         post "/elections", params: invalid_params
         expect(response).to have_http_status(:unprocessable_entity)
       end
@@ -68,8 +83,10 @@ RSpec.describe "Elections", type: :request do
   # GET /edit
   describe "GET /elections/:id/edit" do 
     context "when election exists (ID valid)" do 
+      let!(:election) { create(:election) }
+
       it "renders a form for editing an existing election" do 
-        get "/elections/1/edit"
+        get "/elections/#{election.id}/edit"
         expect(response).to have_http_status(:ok)
       end
     end
@@ -85,29 +102,18 @@ RSpec.describe "Elections", type: :request do
   # PUT /update
   describe "PATCH /elections/:id" do 
     context "with valid params" do 
+      let!(:election) { create(:election) }
+
       it "updates existing election and redirects" do 
-        valid_params = { election: { 
-          title: "Election - 2026", 
-          description: "Loremipsum", 
-          status: "draft", 
-          start_time: 1.day.from_now,
-          end_time: 3.days.from_now,
-          election_day: Date.today + 9 } }
-        patch "/elections/1", params: valid_params
+        patch "/elections/#{election.id}", params: valid_params
         expect(response).to have_http_status(:found)
       end
     end
 
     context "with invalid params" do 
-      it "does not creates a new election, renders form with errors" do 
-        invalid_params = { election: { 
-          title: nil, 
-          description: nil,
-          status: "", 
-          start_time: "",
-          end_time: "",
-          election_day: "" } }
-        patch "/elections/1", params: invalid_params
+      let!(:election) { create(:election) }
+      it "does not update the election, renders form with errors" do 
+        patch "/elections/#{election.id}", params: invalid_params
         expect(response).to have_http_status(:unprocessable_entity)
       end
     end
@@ -115,9 +121,11 @@ RSpec.describe "Elections", type: :request do
 
   # DELETE /destroy
   describe "DELETE /elections/:id" do 
-    context "when election exists (ID valid)" do 
+    context "when election exists (ID valid)" do
+      let!(:election) { create(:election) }
+
       it "delete election and redirects" do 
-        delete "/elections/1"
+        delete "/elections/#{election.id}"
         expect(response).to have_http_status(:found)
       end
     end

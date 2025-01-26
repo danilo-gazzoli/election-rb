@@ -37,11 +37,11 @@ class ElectionsController < ApplicationController
       return head :not_found
     end
 
-    if @election.nil? 
-      return head :not_found
+    unless @election.update(election_params) 
+      return render :edit, status: :unprocessable_entity
     end
 
-    @election.update(election_params)
+    redirect_to @election
   end
 
   def destroy
