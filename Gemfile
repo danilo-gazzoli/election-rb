@@ -5,15 +5,15 @@ ruby "3.2.0"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 7.1.0"
 
+# postgresql
+gem 'pg', '1.6.0.rc1'
+
 # rubocop
 gem 'rubocop', '~> 1.20'
 gem 'rubocop-rails', '~> 2.0'
 
 # The original asset pipeline for Rails [https://github.com/rails/sprockets-rails]
 gem "sprockets-rails"
-
-# Use sqlite3 as the database for Active Record
-gem "sqlite3", "~> 1.4"
 
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
@@ -56,6 +56,9 @@ group :development, :test do
   gem 'rspec-rails', '~> 7.1'
   gem "factory_bot_rails", "~> 6.4" 
   gem "faker", "~> 3.5"
+
+  # ENV
+  gem "dotenv-rails"
 end
 
 group :development do
