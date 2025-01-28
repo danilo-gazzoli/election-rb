@@ -30,6 +30,8 @@ gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 
+gem 'capybara'
+
 # Use Redis adapter to run Action Cable in production
 # gem "redis", ">= 4.0.1"
 
@@ -79,4 +81,9 @@ group :test do
 
   # shoulda matchers
   gem "shoulda-matchers", "~> 6.4"
+
+  # simplecov
+  gem 'simplecov', require: false
+  gem 'simplecov-html', require: false
+  gem 'simplecov_json_formatter', require: false
 end
