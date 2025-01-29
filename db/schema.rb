@@ -28,7 +28,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_29_005527) do
   create_table "offices", force: :cascade do |t|
     t.string "name", null: false
     t.integer "num_of_seats", default: 1, null: false
-    t.boolean "needs_vice", null: false
+    t.boolean "needs_vice", default: false, null: false
     t.bigint "election_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
