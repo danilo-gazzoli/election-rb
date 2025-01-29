@@ -1,4 +1,5 @@
 class Election < ApplicationRecord
+  has_many :office
 
   # title validations
   validates :title, presence: true
