@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Election < ApplicationRecord
   has_many :office
 
@@ -17,7 +19,7 @@ class Election < ApplicationRecord
 
   # start and end time validation
   validates :start_time, presence: true
-  validates :end_time, presence: true, comparison:  { greater_than: :start_time }
+  validates :end_time, presence: true, comparison: { greater_than: :start_time }
   validate :is_future_time
 
   # election day validation
@@ -30,30 +32,29 @@ class Election < ApplicationRecord
   def election_day_must_be_date
     return unless election_day.present?
 
-    unless election_day.is_a?(Date) || election_day.is_a?(Time) || election_day.is_a?(ActiveSupport::TimeWithZone)
-      errors.add(:election_day, "is not a valid date")
-    end
+    return if election_day.is_a?(Date) || election_day.is_a?(Time) || election_day.is_a?(ActiveSupport::TimeWithZone)
+
+    errors.add(:election_day, 'is not a valid date')
   end
 
   def is_future_day
     return unless election_day.present?
 
     if election_day.is_a?(Integer)
-      errors.add(:election_day, "must be a valid date, not a number")
+      errors.add(:election_day, 'must be a valid date, not a number')
       return
     end
 
-    if election_day < Date.today
-      errors.add(:election_day, "must be a future date")
-    end
+    return unless election_day < Date.today
+
+    errors.add(:election_day, 'must be a future date')
   end
 
   def is_future_time
     return unless start_time.present?
 
-    if start_time < Time.current
-      errors.add(:start_time, "must be the current time or in future")
-    end
-  end
+    return unless start_time < Time.current
 
+    errors.add(:start_time, 'must be the current time or in future')
+  end
 end
