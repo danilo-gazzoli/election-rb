@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 require 'simplecov'
 require 'simplecov-html'
 require 'simplecov_json_formatter'
 
 SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new([
-  SimpleCov::Formatter::JSONFormatter,
-  SimpleCov::Formatter::HTMLFormatter
-])
+                                                                 SimpleCov::Formatter::JSONFormatter,
+                                                                 SimpleCov::Formatter::HTMLFormatter
+                                                               ])
 SimpleCov.start do
   add_group 'Config', 'config'
   add_group 'Controllers', 'app/controllers'
@@ -18,7 +20,7 @@ end
 require 'spec_helper'
 ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'
-abort("The Rails environment is running in production mode!") if Rails.env.production?
+abort('The Rails environment is running in production mode!') if Rails.env.production?
 
 require 'rspec/rails'
 require 'capybara/rails'
@@ -44,8 +46,8 @@ RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
 
   # shoulda matchers config
-  Shoulda::Matchers.configure do |config| 
-    config.integrate do |with| 
+  Shoulda::Matchers.configure do |config|
+    config.integrate do |with|
       with.library :rails
       with.test_framework :rspec
     end
