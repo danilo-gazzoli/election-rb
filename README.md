@@ -71,8 +71,8 @@ The primary focus is on **transparency, security, and cost-efficiency**.
 
 ### Common Dependencies
 
-- **Ruby** (3.3+ recommended)
-- **Rails** (8.x or higher)
+- **Ruby** (3.2.0 recommended)
+- **Rails** (7.1.0 or higher)
 - **PostgreSQL** (version 13+ or compatible)
 - **Redis** (5+ or compatible)
 - Typical Rails gems: `pg`, `redis`, `devise` (optional for authentication), `pundit` or `cancancan` (optional for authorization), etc.
