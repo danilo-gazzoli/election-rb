@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # This file is auto-generated from the current state of the database. Instead
 # of editing this file, please use the migrations feature of Active Record to
 # incrementally modify your database, and then regenerate this schema definition.
@@ -12,30 +10,30 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 20_250_129_005_527) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_29_005527) do
   # These are extensions that must be enabled in order to support this database
-  enable_extension 'plpgsql'
+  enable_extension "plpgsql"
 
-  create_table 'elections', force: :cascade do |t|
-    t.string 'title', null: false
-    t.text 'description'
-    t.integer 'status', default: 0, null: false
-    t.datetime 'start_time', null: false
-    t.datetime 'end_time', null: false
-    t.date 'election_day', null: false
-    t.datetime 'created_at', null: false
-    t.datetime 'updated_at', null: false
+  create_table "elections", force: :cascade do |t|
+    t.string "title"
+    t.text "description"
+    t.integer "status", default: 0, null: false
+    t.datetime "start_time"
+    t.datetime "end_time"
+    t.date "election_day"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
-  create_table 'offices', force: :cascade do |t|
-    t.string 'name', null: false
-    t.integer 'num_of_seats', default: 1, null: false
-    t.boolean 'needs_vice', default: false, null: false
-    t.bigint 'election_id', null: false
-    t.datetime 'created_at', null: false
-    t.datetime 'updated_at', null: false
-    t.index ['election_id'], name: 'index_offices_on_election_id'
+  create_table "offices", force: :cascade do |t|
+    t.string "name"
+    t.integer "num_of_seats"
+    t.boolean "needs_vice"
+    t.bigint "election_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["election_id"], name: "index_offices_on_election_id"
   end
 
-  add_foreign_key 'offices', 'elections'
+  add_foreign_key "offices", "elections"
 end

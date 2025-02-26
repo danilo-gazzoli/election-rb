@@ -158,7 +158,7 @@ describe Election do
     end
 
     it 'is not valid when election day is in the past' do
-      election.election_day = Time.zone.now - 1.day
+      election.election_day = Date.yesterday
       expect(election).to_not be_valid
     end
   end
