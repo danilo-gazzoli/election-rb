@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ElectionsController < ApplicationController
   def index
     @elections = Election.all
@@ -5,9 +7,9 @@ class ElectionsController < ApplicationController
 
   def show
     @election = Election.find_by(id: params[:id])
-    unless @election 
-      return head :not_found
-    end
+    return if @election
+
+    head :not_found
   end
 
   def new
@@ -16,39 +18,31 @@ class ElectionsController < ApplicationController
 
   def create
     @election = Election.new(election_params)
-    unless @election.save 
-      return render :new, status: :unprocessable_entity 
-    end
+    return render :new, status: :unprocessable_entity unless @election.save
 
     redirect_to @election
   end
 
   def edit
     @election = Election.find_by(id: params[:id])
-    unless @election 
-      return head :not_found
-    end
+    return if @election
+
+    head :not_found
   end
 
   def update
     @election = Election.find_by(id: params[:id])
 
-    unless @election 
-      return head :not_found
-    end
+    return head :not_found unless @election
 
-    unless @election.update(election_params) 
-      return render :edit, status: :unprocessable_entity
-    end
+    return render :edit, status: :unprocessable_entity unless @election.update(election_params)
 
     redirect_to @election
   end
 
   def destroy
     @election = Election.find_by(id: params[:id])
-    unless @election 
-      return head :not_found
-    end
+    return head :not_found unless @election
 
     @election.destroy
     redirect_to elections_path
@@ -56,13 +50,14 @@ class ElectionsController < ApplicationController
 
   private
 
-  def election_params 
+  def election_params
     params.require(:election).permit(
       :title,
       :description,
       :status,
       :start_time,
       :end_time,
-      :election_day)
+      :election_day
+    )
   end
 end
