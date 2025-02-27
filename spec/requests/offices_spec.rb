@@ -54,7 +54,7 @@ RSpec.describe 'Offices', type: :request do
 
   # GET /new (form)
   describe 'GET /offices/new' do
-    it 'renders a form for creating a new article' do
+    it 'renders a form for creating a new office' do
       get '/offices/new'
       expect(response).to have_http_status(:ok)
     end

@@ -30,7 +30,7 @@ RSpec.describe 'Elections', type: :request do
     let!(:election) { create(:election) }
 
     it 'returns a list of elections' do
-      get "/elections/#{election.id}"
+      get "/elections/"
       expect(response).to have_http_status(:ok)
     end
   end
@@ -131,7 +131,7 @@ RSpec.describe 'Elections', type: :request do
 
     context 'when elections does NOT exists (ID invalid)' do
       it 'returns a 404 not found' do
-        get '/elections/9999999999'
+        delete '/elections/9999999999'
         expect(response).to have_http_status(:not_found)
       end
     end
