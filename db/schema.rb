@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_02_28_161624) do
+ActiveRecord::Schema[7.1].define(version: 2025_02_28_162441) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -63,7 +63,19 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_28_161624) do
     t.index ["election_id"], name: "index_offices_on_election_id"
   end
 
+  create_table "parties", force: :cascade do |t|
+    t.string "name"
+    t.string "abbreviation"
+    t.integer "party_number"
+    t.text "description"
+    t.bigint "election_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["election_id"], name: "index_parties_on_election_id"
+  end
+
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "offices", "elections"
+  add_foreign_key "parties", "elections"
 end
