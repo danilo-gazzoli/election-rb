@@ -26,8 +26,8 @@ RSpec.describe Party, type: :model do
     context 'negative cases' do
       it 'is not valid when name is nil' do 
         party.name = nil
-        expec(party).to_not be_valid
-        expect(party.errors[:name]).to include("can't be nil")
+        expect(party).to_not be_valid
+        expect(party.errors[:name]).to include("can't be blank")
       end
 
       it 'is not valid when name is blank' do
@@ -73,8 +73,8 @@ RSpec.describe Party, type: :model do
     context 'negative cases' do
       it 'is not valid when abbreviation is nil' do 
         party.abbreviation = nil
-        expec(party).to_not be_valid
-        expect(party.errors[:abbreviation]).to include("can't be nil")
+        expect(party).to_not be_valid
+        expect(party.errors[:abbreviation]).to include("can't be blank")
       end
 
       it 'is not valid when abbreviation is blank' do
@@ -203,7 +203,7 @@ RSpec.describe Party, type: :model do
         expect(party).to be_valid
       end
 
-      it 'is valid when the image file is 5 MB' do
+      it 'is valid when the image file is 6 MB' do
         file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'fivemb_image.png'), 'image/png')
         party.logo.attach(file)
         expect(party).to be_valid
@@ -218,12 +218,11 @@ RSpec.describe Party, type: :model do
         expect(party.errors[:logo]).to include("must be a JPEG or PNG image")
       end
 
-      it 'is not valid when the image file exceeds 5 MB' do
-        # Supondo que exista um arquivo fixture com tamanho maior que 5 MB
+      it 'is not valid when the image file exceeds 6 MB' do
         file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'large_image.png'), 'image/png')
         party.logo.attach(file)
         expect(party).to_not be_valid
-        expect(party.errors[:logo]).to include("file size must be less than 5 MB")
+        expect(party.errors[:logo]).to include("file size must be less than 6 MB")
       end
     end
   end
