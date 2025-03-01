@@ -30,7 +30,7 @@ RSpec.describe 'Elections', type: :request do
     let!(:election) { create(:election) }
 
     it 'returns a list of elections' do
-      get "/elections/"
+      get '/elections/'
       expect(response).to have_http_status(:ok)
     end
   end
