@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class OfficesController < ApplicationController
   def index
     @offices = Office.all
@@ -44,7 +46,6 @@ class OfficesController < ApplicationController
 
     @office.destroy
     redirect_to offices_path
-
   end
 
   private
@@ -57,5 +58,4 @@ class OfficesController < ApplicationController
       :election_id
     )
   end
-
 end

@@ -4,7 +4,7 @@ require 'rails_helper'
 
 RSpec.describe 'Offices', type: :request do
   let!(:election) { create(:election) }
-  
+
   let(:valid_params) do
     { office: {
       name: 'President',
@@ -28,7 +28,7 @@ RSpec.describe 'Offices', type: :request do
     let!(:office) { create(:office) }
 
     it 'returns a list of offices' do
-      get "/offices"
+      get '/offices'
       expect(response).to have_http_status(:ok)
     end
   end
