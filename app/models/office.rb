@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Office < ApplicationRecord
-  belongs_to :election
+  has_and_belongs_to_many :elections
 
   # name validations
   validates :name, presence: true
