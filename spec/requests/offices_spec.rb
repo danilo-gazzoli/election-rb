@@ -10,14 +10,15 @@ RSpec.describe 'Offices', type: :request do
       name: 'President',
       num_of_seats: 1,
       needs_vice: false,
+      election_ids: [election.id]
     } }
   end
 
   let(:invalid_params) do
     { office: {
-      name: 'President',
-      num_of_seats: 1,
-      needs_vice: false,
+      name: nil,
+      num_of_seats: 0,
+      needs_vice: nil,
     } }
   end
 
