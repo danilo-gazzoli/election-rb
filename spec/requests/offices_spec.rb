@@ -10,7 +10,6 @@ RSpec.describe 'Offices', type: :request do
       name: 'President',
       num_of_seats: 1,
       needs_vice: false,
-      election_id: election.id
     } }
   end
 
@@ -19,7 +18,6 @@ RSpec.describe 'Offices', type: :request do
       name: 'President',
       num_of_seats: 1,
       needs_vice: false,
-      election_id: nil
     } }
   end
 

@@ -55,7 +55,6 @@ class OfficesController < ApplicationController
       :name,
       :num_of_seats,
       :needs_vice,
-      :election_id
     )
   end
 end

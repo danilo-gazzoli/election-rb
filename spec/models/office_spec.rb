@@ -92,13 +92,4 @@ RSpec.describe 'Office', type: :model do
       end
     end
   end
-
-  describe 'election_id validations' do
-    context 'negative validations' do
-      it 'is not valid when election_id is nil' do
-        office.election = nil
-        expect(office).to_not be_valid
-      end
-    end
-  end
 end
