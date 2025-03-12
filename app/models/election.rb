@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 class Election < ApplicationRecord
-  has_many :office
   has_and_belongs_to_many :parties
   has_and_belongs_to_many :offices
 
