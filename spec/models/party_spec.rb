@@ -198,13 +198,23 @@ RSpec.describe Party, type: :model do
       end
 
       it 'is valid when a proper image file is attached' do
-        file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'exemple.png'), 'image/png')
+        file = fixture_file_upload(Rails.root.join(
+          'spec',
+          'fixtures',
+          'files',
+          'exemple.png'
+        ),'image/png')
         party.logo.attach(file)
         expect(party).to be_valid
       end
 
       it 'is valid when the image file is 6 MB' do
-        file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'fivemb_image.png'), 'image/png')
+        file = fixture_file_upload(Rails.root.join(
+          'spec',
+          'fixtures',
+          'files',
+          'fivemb_image.png'
+        ), 'image/png')
         party.logo.attach(file)
         expect(party).to be_valid
       end
@@ -212,14 +222,23 @@ RSpec.describe Party, type: :model do
 
     context 'negative cases' do
       it 'is not valid when an attached file is not an image' do
-        file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'document.pdf'), 'application/pdf')
+        file = fixture_file_upload(Rails.root.join(
+          'spec',
+          'fixtures',
+          'files',
+          'document.pdf'
+        ), 'application/pdf')
         party.logo.attach(file)
         expect(party).to_not be_valid
         expect(party.errors[:logo]).to include('must be a JPEG or PNG image')
       end
 
       it 'is not valid when the image file exceeds 6 MB' do
-        file = fixture_file_upload(Rails.root.join('spec', 'fixtures', 'files', 'large_image.png'), 'image/png')
+        file = fixture_file_upload(Rails.root.join(
+          'spec',
+          'fixtures',
+          'files',
+          'large_image.png'), 'image/png')
         party.logo.attach(file)
         expect(party).to_not be_valid
         expect(party.errors[:logo]).to include('file size must be less than 6 MB')
