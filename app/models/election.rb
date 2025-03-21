@@ -3,6 +3,7 @@
 class Election < ApplicationRecord
   has_and_belongs_to_many :parties
   has_and_belongs_to_many :offices
+  has_and_belongs_to_many :candidates
 
   # title validations
   validates :title, presence: true

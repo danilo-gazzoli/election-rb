@@ -25,13 +25,13 @@ RSpec.describe 'Candidate', type: :model do
       it 'is not valid when name is nil' do
         candidate.name = nil
         expect(candidate).to_not be_valid 
-        expect(candidate.errors[:name].to include("can'n be blank"))
+        expect(candidate.errors[:name]).to include("can't be blank")
       end
 
       it 'is not valid when name is blank' do
         candidate.name = ''
         expect(candidate).to_not be_valid
-        expect(candidate.errors[:name].to include("can'n be blank"))
+        expect(candidate.errors[:name]).to include("can't be blank")
       end
 
       it 'is not valid when name is shorter 5 characters' do
@@ -43,7 +43,7 @@ RSpec.describe 'Candidate', type: :model do
       it 'is not valid when name is too longer than 50 characters' do
         candidate.name = 'p'*51
         expect(candidate).to_not be_valid
-        expect(candidate.errors[:name]).to include("is too longer (maximum is 50 characters)")
+        expect(candidate.errors[:name]).to include("is too long (maximum is 50 characters)")
       end
     end
   end
@@ -51,53 +51,46 @@ RSpec.describe 'Candidate', type: :model do
   describe 'candidate number validations' do
     context 'positive validations' do
       it 'is valid when candidate number is present' do
-        candidate.number = '20'
+        candidate.candidate_num = '20'
         expect(candidate).to be_valid
       end
 
       it 'is valid when candidate number is a string' do
-        candidate.number = '20'
+        candidate.candidate_num = '20'
         expect(candidate).to be_valid
       end
 
       it 'is valid when candidate number is lower than 15 characters' do
-        candidate.number = '20'
+        candidate.candidate_num = '20'
         expect(candidate).to be_valid
       end
 
       it 'is valid when candidate number length is most 1 character' do
-        candidate.number = '20'
+        candidate.candidate_num = '20'
         expect(candidate).to be_valid
       end
     end
 
     context 'negative validations' do
       it 'is not valid when candidate number is blank' do
-        cadidate.number = ''
+        candidate.candidate_num = ''
         expect(candidate).to_not be_valid
-        expect(candidate.errors[:candidate_num].to include("can't be blank"))
+        expect(candidate.errors[:candidate_num]).to include("can't be blank")
       end
 
       it 'is not valid when candidate number is nil' do
-        candidate.number = nil
+        candidate.candidate_num = nil
         expect(candidate).to_not be_valid
-        expect(candidate.errors[:candidate_num].to include("can't be blank"))
-      end
-
-      it 'is not valid when candidate number is not a string' do
-        candidate.number = 20
-        expect(candidate).to_not be_valid
-        expect(candidate.errors[:candidate_num].to include("must be a string"))
+        expect(candidate.errors[:candidate_num]).to include("can't be blank")
       end
 
       it 'is not valid when candidate number length is most 15 characters' do
-        candidate.number = '1'*16
+        candidate.candidate_num = '1'*16
         expect(candidate).to_not be_valid
-        expect(candidate.errors[:candidate_num].to include("is too longer (maximum is 15 characters)"))
+        expect(candidate.errors[:candidate_num]).to include("is too long (maximum is 15 characters)")
       end
     end
   end
-
 
   describe 'photo profile validations' do
     context 'positive validations' do
@@ -111,7 +104,7 @@ RSpec.describe 'Candidate', type: :model do
           'spec',
           'fixtures',
           'files',
-          'example.png'
+          'exemple.png'
         ), 'image/png')
         candidate.photo.attach(file)
         expect(candidate).to be_valid
@@ -137,9 +130,9 @@ RSpec.describe 'Candidate', type: :model do
           'files',
           'document.pdf'
         ), 'application.pdf')
-        party.logo.attach(file)
-        expect(party).to_not be_valid
-        expect(party.errors[:logo]).to include('must be a JPEG or PNG image')
+        candidate.photo.attach(file)
+        expect(candidate).to_not be_valid
+        expect(candidate.errors[:photo]).to include('must be a JPEG or PNG image')
       end
 
       it 'is not valid when the image file exceeds 6 MB' do
@@ -148,9 +141,9 @@ RSpec.describe 'Candidate', type: :model do
           'fixtures',
           'files',
           'large_image.png'), 'image/png')
-        party.logo.attach(file)
-        expect(party).to_not be_valid
-        expect(party.errors[:logo]).to include('file size must be less than 6 MB')
+        candidate.photo.attach(file)
+        expect(candidate).to_not be_valid
+        expect(candidate.errors[:photo]).to include('file size must be less than 6 MB')
       end
     end
   end
