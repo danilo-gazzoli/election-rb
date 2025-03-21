@@ -8,7 +8,7 @@ RSpec.describe 'Parties', type: :request do
       name: 'Partido de teste do controller',
       abbreviation: 'PTC',
       party_number: 31,
-      description: 'A'*30
+      description: 'A' * 30
     } }
   end
 

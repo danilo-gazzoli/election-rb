@@ -54,7 +54,7 @@ class OfficesController < ApplicationController
     params.require(:office).permit(
       :name,
       :num_of_seats,
-      :needs_vice,
+      :needs_vice
     )
   end
 end

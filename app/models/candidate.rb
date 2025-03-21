@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Candidate < ApplicationRecord
   belongs_to :office
   belongs_to :election
@@ -9,7 +11,7 @@ class Candidate < ApplicationRecord
   validates :name, presence: true, length: { minimum: 5, maximum: 50 }
 
   # candidate number
-  validates :candidate_num, presence: true, length: { minimum: 1, maximum: 15 } 
+  validates :candidate_num, presence: true, length: { minimum: 1, maximum: 15 }
   validate :candidate_num_must_be_a_string
 
   # profile photo
@@ -29,8 +31,8 @@ class Candidate < ApplicationRecord
   end
 
   def candidate_num_must_be_a_string
-    unless candidate_num.is_a?(String)
-      errors.add(:candidate_num, "must be a string")
-    end
+    return if candidate_num.is_a?(String)
+
+    errors.add(:candidate_num, 'must be a string')
   end
 end
