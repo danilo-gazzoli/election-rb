@@ -17,6 +17,9 @@ class Candidate < ApplicationRecord
   # profile photo
   validate :profile_pic_content_type_and_size
 
+  # relationships
+  validates :election, :office, :party, presence: true
+
   private
 
   def profile_pic_content_type_and_size
