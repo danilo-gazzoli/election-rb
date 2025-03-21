@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class PartiesController < ApplicationController
   def index
     @parties = Party.all

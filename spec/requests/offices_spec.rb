@@ -18,7 +18,7 @@ RSpec.describe 'Offices', type: :request do
     { office: {
       name: nil,
       num_of_seats: 0,
-      needs_vice: nil,
+      needs_vice: nil
     } }
   end
 
