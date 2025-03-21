@@ -13,7 +13,7 @@ RSpec.describe 'Candidates', type: :request do
       candidate_num: '18',
       election_id: election.id,
       office_id: office.id,
-      partry_id: party.id
+      party_id: party.id
     } }
   end
 
