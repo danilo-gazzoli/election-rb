@@ -1,5 +1,6 @@
 class Pollworker < ApplicationRecord
   belongs_to :election
+  has_one :ballot
 
   enum status: { active: 0, inactive: 1 }
 end
