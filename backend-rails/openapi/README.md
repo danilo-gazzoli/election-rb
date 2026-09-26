@@ -13,6 +13,10 @@ Unknown paths under `/api/v1` return a JSON `not_found` error. Existing
 server-rendered routes remain available during migration to the separate
 frontend.
 
+The voting interface is device-independent: a managed phone, computer, or
+tablet can host it. Planned API paths use `voting-device` for this role. The
+server controls release and confirmation regardless of screen type.
+
 The full RSpec suite includes `spec/contracts/openapi_v1_spec.rb` and the
 request checks. CI first migrates an empty PostgreSQL database, then runs the
 suite. When an operation is implemented, update its OpenAPI status and add

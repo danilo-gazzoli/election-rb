@@ -167,12 +167,12 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/pollworker/tablets/{id}/release:
+  /api/v1/pollworker/voting-devices/{id}/release:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
       - $ref: '#/components/parameters/IdempotencyKey'
     post:
-      operationId: releaseTablet
+      operationId: releaseVotingDevice
       summary: Release one anonymous voting session after physical identity check
       x-implementation-status: planned
       x-authentication: poll-worker-session-with-csrf
@@ -182,34 +182,34 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TabletSession'
+                $ref: '#/components/schemas/VotingDeviceSession'
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/tablet/state:
+  /api/v1/voting-device/state:
     get:
-      operationId: getTabletState
-      summary: Recover authoritative tablet state after release or reconnection
+      operationId: getVotingDeviceState
+      summary: Recover authoritative voting device state after release or reconnection
       x-implementation-status: planned
-      x-authentication: tablet-credential
+      x-authentication: voting-device-credential
       responses:
         '200':
-          description: Tablet state without a previously confirmed choice
+          description: Voting device state without a previously confirmed choice
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TabletState'
+                $ref: '#/components/schemas/VotingDeviceState'
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/tablet/confirmations:
+  /api/v1/voting-device/confirmations:
     parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
     post:
       operationId: confirmVote
       summary: Confirm exactly one voting stage
       x-implementation-status: planned
-      x-authentication: tablet-credential-with-csrf
+      x-authentication: voting-device-credential-with-csrf
       requestBody:
         required: true
         content:
@@ -340,7 +340,7 @@ components:
           type: array
           items:
             type: object
-    TabletSession:
+    VotingDeviceSession:
       type: object
       required: [session_id, state]
       properties:
@@ -349,7 +349,7 @@ components:
           format: uuid
         state:
           type: string
-    TabletState:
+    VotingDeviceState:
       type: object
       required: [state]
       properties:

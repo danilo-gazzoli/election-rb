@@ -34,9 +34,9 @@ RSpec.describe 'API v1 operation inventory' do
       '/api/v1/admin/elections' => 'post',
       '/api/v1/admin/elections/{id}' => 'get',
       '/api/v1/admin/elections/{id}/preview' => 'post',
-      '/api/v1/pollworker/tablets/{id}/release' => 'post',
-      '/api/v1/tablet/state' => 'get',
-      '/api/v1/tablet/confirmations' => 'post'
+      '/api/v1/pollworker/voting-devices/{id}/release' => 'post',
+      '/api/v1/voting-device/state' => 'get',
+      '/api/v1/voting-device/confirmations' => 'post'
     }
 
     planned.each do |path, method|
