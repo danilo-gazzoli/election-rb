@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Creates ballots before the pollworker table exists.
 class CreateBallots < ActiveRecord::Migration[7.1]
   def change
     create_table :ballots do |t|
@@ -5,7 +8,7 @@ class CreateBallots < ActiveRecord::Migration[7.1]
       t.string :password
       t.integer :status, null: false, default: 0
       t.references :election, null: false, foreign_key: true
-      t.references :pollworker, null: false, foreign_key: true
+      t.references :pollworker, null: false
 
       t.timestamps
     end

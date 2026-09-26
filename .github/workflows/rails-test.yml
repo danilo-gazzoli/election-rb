@@ -1,0 +1,45 @@
+name: Rails tests
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: election_test
+          POSTGRES_PASSWORD: election_test
+          POSTGRES_DB: election_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U election_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend-rails
+    env:
+      RAILS_ENV: test
+      DB_HOST: localhost
+      DB_USERNAME: election_test
+      DB_PASSWORD: election_test
+      DB_NAME_TEST: election_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2.0'
+          bundler-cache: true
+          working-directory: backend-rails
+      # db:prepare may load schema.rb and hide a broken migration history.
+      - name: Migrate an empty database
+        run: bundle exec rails db:migrate
+      - name: Run regression tests
+        run: bundle exec rspec

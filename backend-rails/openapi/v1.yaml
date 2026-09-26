@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: School Election API
+  version: 1.0.0
+  description: >-
+    Versioned JSON contract for the separate frontend. Operations marked planned
+    are design targets, not available routes. Their payloads remain draft until
+    the corresponding feature is implemented and covered by request tests.
+servers:
+  - url: /
+paths:
+  /api/v1/health:
+    get:
+      operationId: getApiHealth
+      summary: Report API liveness and version
+      description: Liveness only; this response does not certify database readiness.
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: API process is responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /api/v1/auth/session:
+    get:
+      operationId: getUserSession
+      summary: Read the current user session and CSRF token
+      x-implementation-status: planned
+      x-authentication: optional-user-session
+      responses:
+        '200':
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/auth/login:
+    post:
+      operationId: loginUser
+      summary: Authenticate a creator or poll worker
+      x-implementation-status: planned
+      x-authentication: anonymous-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutUser
+      summary: End the current user session
+      x-implementation-status: planned
+      x-authentication: user-session-with-csrf
+      responses:
+        '204':
+          description: Session ended
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections:
+    get:
+      operationId: listElections
+      summary: List elections visible to the authenticated creator
+      x-implementation-status: planned
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Election summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElection
+      summary: Create a draft election
+      x-implementation-status: planned
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectionDraft'
+      responses:
+        '201':
+          description: Created election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      operationId: getElection
+      summary: Read an election configuration
+      x-implementation-status: planned
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Election configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+    patch:
+      operationId: updateElection
+      summary: Update an election that has not opened
+      x-implementation-status: planned
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectionDraft'
+      responses:
+        '200':
+          description: Updated election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{id}/preview:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: previewElection
+      summary: Validate the ballot before opening a round
+      x-implementation-status: planned
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Ordered stages and configuration problems
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElectionPreview'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/pollworker/tablets/{id}/release:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: releaseTablet
+      summary: Release one anonymous voting session after physical identity check
+      x-implementation-status: planned
+      x-authentication: poll-worker-session-with-csrf
+      responses:
+        '200':
+          description: Current operational session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TabletSession'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/tablet/state:
+    get:
+      operationId: getTabletState
+      summary: Recover authoritative tablet state after release or reconnection
+      x-implementation-status: planned
+      x-authentication: tablet-credential
+      responses:
+        '200':
+          description: Tablet state without a previously confirmed choice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TabletState'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/tablet/confirmations:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: confirmVote
+      summary: Confirm exactly one voting stage
+      x-implementation-status: planned
+      x-authentication: tablet-credential-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmationIntent'
+      responses:
+        '200':
+          description: Durable confirmation or idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmationReceipt'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ApiError:
+      description: Stable JSON error; the HTTP status identifies the failure class
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: not_found
+            message:
+              type: string
+              example: Resource not found
+            details:
+              type: array
+              items:
+                type: object
+    Health:
+      type: object
+      required: [status, api_version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        api_version:
+          type: string
+          enum: [v1]
+    UserSession:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+        csrf_token:
+          type: string
+          description: Provided for same-origin mutating requests; never a login credential.
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+          format: password
+    ElectionDraft:
+      type: object
+      required: [title, timezone]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+        configuration_version:
+          type: integer
+          description: Required for updates once optimistic concurrency is implemented.
+    Election:
+      allOf:
+        - $ref: '#/components/schemas/ElectionDraft'
+        - type: object
+          required: [id, state]
+          properties:
+            id:
+              type: string
+            state:
+              type: string
+    ElectionPreview:
+      type: object
+      required: [stages, problems]
+      properties:
+        stages:
+          type: array
+          items:
+            type: object
+        problems:
+          type: array
+          items:
+            type: object
+    TabletSession:
+      type: object
+      required: [session_id, state]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+    TabletState:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+        next_stage_id:
+          type: string
+          nullable: true
+        last_receipt_id:
+          type: string
+          nullable: true
+    ConfirmationIntent:
+      type: object
+      required: [stage_id, kind]
+      properties:
+        stage_id:
+          type: string
+        kind:
+          type: string
+          enum: [nominal, legenda, branco, nulo]
+        number:
+          type: string
+          description: Present only for nominal or legenda input; leading zeroes matter.
+        warning_accepted:
+          type: boolean
+    ConfirmationReceipt:
+      type: object
+      required: [receipt_id, status]
+      properties:
+        receipt_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [confirmed]
+        next_stage_id:
+          type: string
+          nullable: true
