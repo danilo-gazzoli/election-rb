@@ -12,18 +12,18 @@ class MajoritarianSecondChoice
     end
   end
 
-  def initialize(secret:, session_token:)
-    raise ArgumentError, 'secret is required' unless secret.is_a?(String) && !secret.empty?
-    raise ArgumentError, 'session token is required' unless session_token.is_a?(String) && !session_token.empty?
-
-    @secret = secret.dup.freeze
-    @session_token = session_token.dup.freeze
+  def initialize(secret:, session_token:, contest_token:)
+    @secret = required_string!(secret, 'secret')
+    @session_token = required_string!(session_token, 'session token')
+    @contest_token = required_string!(contest_token, 'contest token')
   end
 
   def fingerprint_for(candidate_id)
     validate_candidate_id!(candidate_id)
 
-    OpenSSL::HMAC.hexdigest('SHA256', @secret, "#{@session_token}:#{candidate_id}")
+    parts = [@session_token, @contest_token, candidate_id.to_s]
+    message = parts.map { |part| "#{part.bytesize}:#{part}" }.join
+    OpenSSL::HMAC.hexdigest('SHA256', @secret, message)
   end
 
   def decide(first_choice_fingerprint:, candidate_id:, warning_acknowledged: false)
@@ -41,6 +41,12 @@ class MajoritarianSecondChoice
   end
 
   private
+
+  def required_string!(value, name)
+    raise ArgumentError, "#{name} is required" unless value.is_a?(String) && !value.empty?
+
+    value.dup.freeze
+  end
 
   def validate_candidate_id!(candidate_id)
     return if candidate_id.is_a?(Integer) && candidate_id.positive?
