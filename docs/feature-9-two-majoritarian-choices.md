@@ -2,7 +2,7 @@
 
 ## Estado e dependências
 
-Este documento mapeia a [issue #25](https://github.com/danilo-gazzoli/election-rb/issues/25), conforme ERS RF-06, RF-19, RF-24, RF-28 e CA-06 e SDD §§3.2, 5.3 e 7.2. A regra pura `MajoritarianSecondChoice` já calcula a impressão HMAC, pede aviso para repetição e classifica a segunda escolha confirmada como nula. Ainda não existe fluxo de sessão e confirmação que a utilize. O PR desta branch permanece em rascunho até que os critérios da issue sejam atendidos.
+Este documento mapeia a [issue #25](https://github.com/danilo-gazzoli/election-rb/issues/25), conforme ERS RF-06, RF-19, RF-24, RF-28 e CA-06 e SDD §§3.2, 5.3 e 7.2. A regra pura `MajoritarianSecondChoice` calcula a impressão HMAC, pede aviso para repetição e classifica a segunda escolha confirmada como nula. Há um fluxo inicial de sessão e confirmação integrado e coberto por testes; ainda faltam concorrência real, API e interface completas, apuração e validação ponta a ponta. O [registro de continuidade](feature-9-continuity-log.md) contém o estado verificado. O PR desta branch permanece em rascunho até que os critérios da issue sejam atendidos.
 
 | Ordem | Dependência | Necessário para F9 |
 | --- | --- | --- |

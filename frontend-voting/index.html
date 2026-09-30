@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#123049">
+    <title>Votação escolar</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">Simulação eleitoral escolar</p>
+        <h1>Votação</h1>
+        <p id="status" role="status" aria-live="polite">Conectando ao dispositivo…</p>
+      </header>
+
+      <section id="pair-panel" class="panel" hidden aria-labelledby="pair-title">
+        <h2 id="pair-title">Parear este dispositivo</h2>
+        <p>Peça o código temporário à pessoa responsável pela eleição.</p>
+        <form id="pair-form">
+          <label for="pair-code">Código de pareamento</label>
+          <input id="pair-code" name="pairing_code" autocomplete="off" required>
+          <button type="submit">Conectar</button>
+        </form>
+      </section>
+
+      <section id="waiting-panel" class="panel" hidden aria-labelledby="waiting-title">
+        <h2 id="waiting-title">Aguardando liberação</h2>
+        <p>O mesário conferirá a lista física e liberará o dispositivo.</p>
+      </section>
+
+      <section id="ballot-panel" class="panel" hidden aria-labelledby="ballot-title">
+        <p id="choice-number" class="eyebrow"></p>
+        <h2 id="ballot-title"></h2>
+        <p>Escolha uma candidatura ou um tipo de voto e confirme esta etapa.</p>
+        <div id="choices" class="choices" role="group" aria-label="Opções de voto"></div>
+        <div class="actions">
+          <button id="confirm-button" type="button" disabled>Confirmar voto</button>
+        </div>
+      </section>
+
+      <section id="warning-panel" class="panel warning" hidden aria-labelledby="warning-title">
+        <h2 id="warning-title">Você escolheu a mesma candidatura</h2>
+        <p>Se confirmar, apenas sua segunda escolha será registrada como voto nulo. Sua primeira escolha permanece válida.</p>
+        <div class="actions">
+          <button id="change-button" type="button" class="secondary">Escolher outra candidatura</button>
+          <button id="confirm-null-button" type="button">Confirmar voto nulo</button>
+        </div>
+      </section>
+
+      <p id="message" class="message" role="alert" aria-live="assertive"></p>
+    </main>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

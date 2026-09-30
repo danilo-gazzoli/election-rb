@@ -24,19 +24,28 @@ end
 RSpec.describe 'API v1 operation inventory' do
   let(:paths) { YAML.safe_load_file(Rails.root.join('openapi/v1.yaml')).fetch('paths') }
 
-  it 'describes the implemented health route and marks future operations as planned' do
+  it 'marks tested routes as implemented and future operations as planned' do
     expect(paths.dig('/api/v1/health', 'get', 'x-implementation-status')).to eq('implemented')
 
-    planned = {
+    implemented = {
       '/api/v1/auth/session' => 'get',
       '/api/v1/auth/login' => 'post',
       '/api/v1/auth/logout' => 'post',
-      '/api/v1/admin/elections' => 'post',
-      '/api/v1/admin/elections/{id}' => 'get',
-      '/api/v1/admin/elections/{id}/preview' => 'post',
+      '/api/v1/admin/rounds/{id}/open' => 'post',
+      '/api/v1/admin/rounds/{id}/close' => 'post',
       '/api/v1/pollworker/voting-devices/{id}/release' => 'post',
       '/api/v1/voting-device/state' => 'get',
-      '/api/v1/voting-device/confirmations' => 'post'
+      '/api/v1/voting-device/confirmations' => 'post',
+      '/api/v1/public/elections/{id}/partial' => 'get'
+    }
+    implemented.each do |path, method|
+      expect(paths.dig(path, method, 'x-implementation-status')).to eq('implemented')
+    end
+
+    planned = {
+      '/api/v1/admin/elections' => 'post',
+      '/api/v1/admin/elections/{id}' => 'get',
+      '/api/v1/admin/elections/{id}/preview' => 'post'
     }
 
     planned.each do |path, method|

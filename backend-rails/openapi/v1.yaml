@@ -27,7 +27,7 @@ paths:
     get:
       operationId: getUserSession
       summary: Read the current user session and CSRF token
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: optional-user-session
       responses:
         '200':
@@ -43,7 +43,7 @@ paths:
     post:
       operationId: loginUser
       summary: Authenticate a creator or poll worker
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: anonymous-with-csrf
       requestBody:
         required: true
@@ -65,7 +65,7 @@ paths:
     post:
       operationId: logoutUser
       summary: End the current user session
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: user-session-with-csrf
       responses:
         '204':
@@ -167,14 +167,49 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/rounds/{id}/open:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: openRound
+      summary: Freeze a valid round configuration and open consecutive voting stages
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Opened round state, snapshot digest and ordered stages
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/rounds/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: closeRound
+      summary: Close after the grace period and persist reconciled tallies
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Closed round and final or pending tally states
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/pollworker/voting-devices/{id}/release:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
-      - $ref: '#/components/parameters/IdempotencyKey'
     post:
       operationId: releaseVotingDevice
       summary: Release one anonymous voting session after physical identity check
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: poll-worker-session-with-csrf
       responses:
         '200':
@@ -190,7 +225,7 @@ paths:
     get:
       operationId: getVotingDeviceState
       summary: Recover authoritative voting device state after release or reconnection
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: voting-device-credential
       responses:
         '200':
@@ -203,12 +238,10 @@ paths:
           $ref: '#/components/responses/ApiError'
 
   /api/v1/voting-device/confirmations:
-    parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
     post:
       operationId: confirmVote
       summary: Confirm exactly one voting stage
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: voting-device-credential-with-csrf
       requestBody:
         required: true
@@ -223,6 +256,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfirmationReceipt'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/public/elections/{id}/partial:
+    get:
+      operationId: getPartialResults
+      summary: Read aggregate partial counts without a winner
+      x-implementation-status: implemented
+      x-authentication: public
+      responses:
+        '200':
+          description: Aggregate partial results
+          content:
+            application/json:
+              schema:
+                type: object
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -279,14 +328,18 @@ components:
           enum: [v1]
     UserSession:
       type: object
-      required: [authenticated]
+      required: [user, csrf_token]
       properties:
-        authenticated:
-          type: boolean
-        roles:
-          type: array
-          items:
-            type: string
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            login:
+              type: string
         csrf_token:
           type: string
           description: Provided for same-origin mutating requests; never a login credential.
@@ -355,25 +408,35 @@ components:
       properties:
         state:
           type: string
-        next_stage_id:
+        session_id:
           type: string
+          nullable: true
+        next_stage_position:
+          type: integer
+          nullable: true
+        stage:
+          type: object
           nullable: true
         last_receipt_id:
           type: string
+          format: uuid
           nullable: true
     ConfirmationIntent:
       type: object
-      required: [stage_id, kind]
+      required: [stage_id, command_key, kind]
       properties:
         stage_id:
+          type: integer
+        command_key:
           type: string
         kind:
           type: string
-          enum: [nominal, legenda, branco, nulo]
-        number:
-          type: string
-          description: Present only for nominal or legenda input; leading zeroes matter.
-        warning_accepted:
+          enum: [nominal, legend, blank, 'null']
+        candidacy_id:
+          type: integer
+        party_id:
+          type: integer
+        warning_acknowledged:
           type: boolean
     ConfirmationReceipt:
       type: object
@@ -385,6 +448,5 @@ components:
         status:
           type: string
           enum: [confirmed]
-        next_stage_id:
-          type: string
-          nullable: true
+        next_stage_position:
+          type: integer

@@ -7,4 +7,7 @@
 # See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
 Rails.application.config.filter_parameters += %i[
   passw secret token _key crypt salt certificate otp ssn
+  pairing_code command_key candidacy_id party_id ballot_number
+  first_choice_fingerprint voting_device
+  kind stage_id warning_acknowledged
 ]
