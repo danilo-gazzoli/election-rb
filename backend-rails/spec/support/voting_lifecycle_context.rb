@@ -34,6 +34,17 @@ RSpec.shared_context 'an opened school voting round' do
                  password: 'long-random-password')
   end
 
+  # Draft/scheduled fixtures must be new rounds, never reset an opened ballot.
+  def round_with_state(state)
+    if %w[draft scheduled].include?(state)
+      Round.create!(election: election, number: 2, state: state, opens_at: round.opens_at,
+                    closes_at: round.closes_at, grace_until: round.grace_until)
+    else
+      round.update!(state: state)
+      round
+    end
+  end
+
   def confirm_first_vote
     Voting::Confirm.call(session: voting_session, stage_id: first_stage.id,
                          command_key: 'first-confirmation', kind: 'nominal',

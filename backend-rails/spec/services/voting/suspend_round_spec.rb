@@ -9,8 +9,8 @@ RSpec.describe 'Voting::SuspendRound' do
   let(:session) { voting_session }
   let(:reason) { 'Power supply inspection' }
 
-  def suspend(actor: creator, justification: reason)
-    Voting::SuspendRound.call(round: round, actor: actor, reason: justification, now: now)
+  def suspend(actor: creator, justification: reason, target_round: round)
+    Voting::SuspendRound.call(round: target_round, actor: actor, reason: justification, now: now)
   end
 
   def confirm_first
@@ -107,9 +107,9 @@ RSpec.describe 'Voting::SuspendRound' do
 
   %w[draft scheduled suspended closed annulled].each do |state|
     it "rejects suspension from #{state}" do
-      round.update!(state: state)
-      expect { suspend }.to raise_error(Voting::SuspendRound::NotAllowed)
-      expect(round.reload.state).to eq(state)
+      target = round_with_state(state)
+      expect { suspend(target_round: target) }.to raise_error(Voting::SuspendRound::NotAllowed)
+      expect(target.reload.state).to eq(state)
       expect(AuditEvent.where(action: 'round_suspend')).to be_empty
     end
   end

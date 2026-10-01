@@ -10,8 +10,8 @@ RSpec.describe 'Voting::ResumeRound' do
 
   before { Voting::SuspendRound.call(round: round, actor: creator, reason: 'Inspection', now: now) }
 
-  def resume(actor: creator, justification: reason, at: now)
-    Voting::ResumeRound.call(round: round, actor: actor, reason: justification, now: at)
+  def resume(actor: creator, justification: reason, at: now, target_round: round)
+    Voting::ResumeRound.call(round: target_round, actor: actor, reason: justification, now: at)
   end
 
   it 'resumes with an operational audit and incident identifying the creator and reason' do
@@ -74,9 +74,9 @@ RSpec.describe 'Voting::ResumeRound' do
 
   %w[draft scheduled open closed annulled].each do |state|
     it "rejects resuming a #{state} round" do
-      round.update!(state: state)
-      expect { resume }.to raise_error(Voting::ResumeRound::NotAllowed)
-      expect(round.reload.state).to eq(state)
+      target = round_with_state(state)
+      expect { resume(target_round: target) }.to raise_error(Voting::ResumeRound::NotAllowed)
+      expect(target.reload.state).to eq(state)
     end
   end
 

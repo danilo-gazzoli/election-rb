@@ -6,8 +6,8 @@ require 'rails_helper'
 RSpec.describe 'Voting::AnnulRound' do
   include_context 'an opened school voting round'
 
-  def annul(actor: creator, reason: 'School cancelled the election', confirmed: true)
-    Voting::AnnulRound.call(round: round, actor: actor, reason: reason, confirmed: confirmed, now: now)
+  def annul(actor: creator, reason: 'School cancelled the election', confirmed: true, target_round: round)
+    Voting::AnnulRound.call(round: target_round, actor: actor, reason: reason, confirmed: confirmed, now: now)
   end
 
   def complete_voting
@@ -32,9 +32,9 @@ RSpec.describe 'Voting::AnnulRound' do
 
   %w[draft scheduled suspended closed].each do |state|
     it "allows confirmed annulment from #{state}" do
-      round.update!(state: state)
-      annul
-      expect(round.reload.state).to eq('annulled')
+      target = round_with_state(state)
+      annul(target_round: target)
+      expect(target.reload.state).to eq('annulled')
     end
   end
 

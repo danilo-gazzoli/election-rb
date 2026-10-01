@@ -189,4 +189,47 @@ RSpec.describe 'Voting lifecycle with concurrent PostgreSQL connections', type: 
     expect(Incident.where(kind: 'abandoned').count).to eq(1)
     expect(AuditEvent.where(action: 'session_abandon').count).to eq(1)
   end
+
+  it 'completes abandonment before a queued confirmation without deadlock or a second receipt' do
+    confirm_first_vote
+    session_id = voting_session.id
+    operator_id = pollworker.id
+    stage_id = second_stage.id
+    clock = now
+    abandonment_started = Queue.new
+    continue_abandonment = Queue.new
+    allow(CastVote).to receive(:create!).and_wrap_original do |original, **attributes|
+      if attributes[:origin] == 'abandonment'
+        abandonment_started << true
+        Timeout.timeout(8) { continue_abandonment.pop }
+      end
+      original.call(**attributes)
+    end
+
+    abandonment, abandonment_pid = worker do
+      Voting::Abandon.call(session: VotingSession.find(session_id), actor: User.find(operator_id),
+                          reason: 'Voter left', now: clock)
+    end
+    take(abandonment_started)
+    confirmation, confirmation_pid = worker do
+      Voting::Confirm.call(session: VotingSession.find(session_id), stage_id: stage_id,
+                           command_key: 'after-abandonment', kind: 'blank', now: clock)
+    end
+    begin
+      expect(confirmation_pid).not_to eq(abandonment_pid)
+      wait_for_database_lock(confirmation_pid)
+    ensure
+      continue_abandonment << true
+    end
+
+    abandonment_result = result_of(abandonment)
+    confirmation_result = result_of(confirmation)
+    expect(abandonment_result).to be_a(VotingSession)
+    expect(confirmation_result).to be_a(Voting::Confirm::NotAllowed)
+    expect(voting_session.reload.state).to eq('abandoned')
+    expect(CastVote.where(origin: 'confirmation').count).to eq(1)
+    expect(CastVote.where(origin: 'abandonment').count).to eq(1)
+    expect(ConfirmationReceipt.count).to eq(1)
+    expect(Incident.where(kind: 'abandoned').count).to eq(1)
+  end
 end

@@ -1,4 +1,4 @@
-\restrict Slc1ukCQyCw2CuFACnY82h4TlIac6WFn3kplAOsmWY2fqTNadWNgYEtnAdf9QpZ
+\restrict E9W7rGP3lEqRZiQXdPZ0dnUrevHxRrLOa9atXk3GCVu7kWsMcUMKiE6Du2DDt16
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -301,6 +301,28 @@ BEGIN
     RAISE EXCEPTION 'round agenda is immutable';
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: protect_round_state_transition(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_round_state_transition() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.state IS NOT DISTINCT FROM OLD.state THEN
+    RETURN NEW;
+  END IF;
+
+  IF OLD.state = 'annulled'
+     OR (OLD.state = 'closed' AND NEW.state <> 'annulled')
+     OR (OLD.state IN ('open', 'suspended') AND NEW.state IN ('draft', 'scheduled')) THEN
+    RAISE EXCEPTION 'round lifecycle cannot move from % to %', OLD.state, NEW.state;
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -1198,7 +1220,8 @@ CREATE TABLE public.rounds (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT chk_rails_e089efb16e CHECK (((number = ANY (ARRAY[1, 2])) AND (opens_at < closes_at) AND (closes_at < grace_until))),
-    CONSTRAINT round_grace_period_ten_minutes CHECK (((EXTRACT(epoch FROM (grace_until - closes_at)) >= (599)::numeric) AND (EXTRACT(epoch FROM (grace_until - closes_at)) <= (601)::numeric)))
+    CONSTRAINT round_grace_period_ten_minutes CHECK (((EXTRACT(epoch FROM (grace_until - closes_at)) >= (599)::numeric) AND (EXTRACT(epoch FROM (grace_until - closes_at)) <= (601)::numeric))),
+    CONSTRAINT round_known_state CHECK (((state)::text = ANY ((ARRAY['draft'::character varying, 'scheduled'::character varying, 'open'::character varying, 'suspended'::character varying, 'closed'::character varying, 'annulled'::character varying])::text[])))
 );
 
 
@@ -1920,7 +1943,7 @@ CREATE UNIQUE INDEX idx_election_party_number ON public.election_party_registrat
 -- Name: idx_known_session_closure; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_known_session_closure ON public.incidents USING btree (voting_session_id) WHERE (((kind)::text = ANY ((ARRAY['abandoned'::character varying, 'cancelled'::character varying])::text[])) AND (remaining_stage_ids IS NOT NULL));
+CREATE UNIQUE INDEX idx_known_session_closure ON public.incidents USING btree (voting_session_id) WHERE (((kind)::text = ANY (ARRAY[('abandoned'::character varying)::text, ('cancelled'::character varying)::text])) AND (remaining_stage_ids IS NOT NULL));
 
 
 --
@@ -2575,6 +2598,13 @@ CREATE TRIGGER round_contest_reference_valid BEFORE INSERT OR UPDATE ON public.r
 
 
 --
+-- Name: rounds round_state_transition; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER round_state_transition BEFORE UPDATE OF state ON public.rounds FOR EACH ROW EXECUTE FUNCTION public.protect_round_state_transition();
+
+
+--
 -- Name: tally_runs tally_run_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3005,11 +3035,12 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Slc1ukCQyCw2CuFACnY82h4TlIac6WFn3kplAOsmWY2fqTNadWNgYEtnAdf9QpZ
+\unrestrict E9W7rGP3lEqRZiQXdPZ0dnUrevHxRrLOa9atXk3GCVu7kWsMcUMKiE6Du2DDt16
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261001030000'),
 ('20261001020000'),
 ('20261001010000'),
 ('20260930130000'),
