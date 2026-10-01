@@ -73,6 +73,50 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/elections/{election_id}/contests:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createContest
+      summary: Create a draft contest and affiliated candidacies atomically
+      description: >-
+        Requires a creator role in this election and registered parties.
+        Rejects configuration after a round opens. The server determines the
+        election and rule version; clients cannot override these fields.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContestConfigurationRequest'
+      responses:
+        '201':
+          description: Contest and candidacies persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/admin/elections:
     get:
       operationId: listElections
@@ -352,6 +396,43 @@ components:
         password:
           type: string
           format: password
+    ContestConfigurationRequest:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          type: object
+          required: [name, position, method, seats, choices_per_person]
+          properties:
+            name:
+              type: string
+            position:
+              type: integer
+              minimum: 1
+            method:
+              type: string
+              enum: [simple_majority, absolute_majority, proportional]
+            seats:
+              type: integer
+              minimum: 1
+            choices_per_person:
+              type: integer
+              minimum: 1
+            has_vice:
+              type: boolean
+              description: This creation operation supports candidacies without a vice.
+            candidacies:
+              type: array
+              items:
+                type: object
+                required: [principal_name, principal_party_id, ballot_number]
+                properties:
+                  principal_name:
+                    type: string
+                  principal_party_id:
+                    type: integer
+                  ballot_number:
+                    type: string
     ElectionDraft:
       type: object
       required: [title, timezone]

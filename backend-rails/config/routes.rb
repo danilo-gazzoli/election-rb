@@ -6,6 +6,7 @@ Rails.application.routes.draw do
       post 'auth/login', to: 'auth#login'
       post 'auth/logout', to: 'auth#logout'
       get 'auth/session', to: 'auth#show'
+      post 'admin/elections/:election_id/contests', to: 'admin/contests#create'
       post 'admin/elections/:election_id/voting-devices', to: 'admin/voting_devices#create'
       post 'admin/rounds/:id/open', to: 'admin/rounds#open'
       post 'admin/rounds/:id/close', to: 'admin/rounds#close'

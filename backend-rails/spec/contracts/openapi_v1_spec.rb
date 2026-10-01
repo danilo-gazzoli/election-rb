@@ -31,6 +31,7 @@ RSpec.describe 'API v1 operation inventory' do
       '/api/v1/auth/session' => 'get',
       '/api/v1/auth/login' => 'post',
       '/api/v1/auth/logout' => 'post',
+      '/api/v1/admin/elections/{election_id}/contests' => 'post',
       '/api/v1/admin/rounds/{id}/open' => 'post',
       '/api/v1/admin/rounds/{id}/close' => 'post',
       '/api/v1/pollworker/voting-devices/{id}/release' => 'post',

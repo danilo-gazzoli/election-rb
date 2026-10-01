@@ -687,3 +687,30 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   integrado da interface. Testes do protótipo frontend não equivalem ao
   aceite da interface completa. O histórico anterior de falha SSH no push
   não foi resolvido por esta correção.
+- Correções salvas no commit `382fbb7` na mesma branch; sem merge em
+  `develop` e sem atualização remota nesta rodada.
+
+## Configuração administrativa — início do próximo ciclo
+
+- Contrato derivado de ERS RF-04 a RF-07, RF-10 e RF-39 documentado em
+  `docs/feature-9-admin-api.md`: criação transacional de disputa e
+  candidaturas, autenticação, filiação e catálogo bloqueado após abertura.
+- Danilo confirmou vermelho em seis testes de requisição: **6 exemplos,
+  6 falhas** (404 para a rota ausente).
+- Implementados `Configuration::CreateContest`, `Admin::ContestsController`
+  e a rota. O comando cria disputa, pessoas, candidaturas e auditoria na
+  mesma transação, valida perfil/filiação e bloqueia configuração aberta.
+  Campos internos da eleição e versão da regra não são aceitos do cliente.
+- O teste de inventário OpenAPI expôs a ausência da rota na documentação;
+  a documentação foi implementada depois da saída vermelha. Os testes
+  também expuseram a colisão com a constante Configuration herdada do Rails
+  e as chaves de texto das candidaturas; ambas foram corrigidas mantendo
+  os mesmos critérios de aceite.
+- Danilo confirmou verde focal: **8 exemplos, 0 falhas**. A criação foi
+  seguida da abertura pela API no mesmo teste, verificando duas etapas e
+  candidaturas no snapshot. Regressão completa confirmada por Danilo:
+  **279 exemplos, 0 falhas, 32 pendências legadas**.
+- **Ponto de retomada:** esta operação está validada. Ainda faltam as demais
+  operações de configuração (partidos, eleição e agenda do turno) pela API,
+  a prévia e o aceite integrado da interface conforme seus requisitos.
+  Nenhum model persistido ou migration foi acrescentado nesta operação.

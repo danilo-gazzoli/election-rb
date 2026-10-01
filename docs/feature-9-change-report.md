@@ -19,6 +19,21 @@
   29 exemplos, 0 falhas depois. Regressão completa: **273 exemplos,
   0 falhas e 32 pendências legadas**.
 
+## Configuração de disputas pela API — 30/09/2026
+
+- Nova rota: `POST /api/v1/admin/elections/:election_id/contests`.
+- `Admin::ContestsController` exige sessão e papel de criador, limita os
+  campos aceitos e traduz falhas para respostas JSON estáveis.
+- `Configuration::CreateContest` cria disputa, pessoas, candidaturas e
+  auditoria em uma transação. Reutiliza as validações dos models existentes,
+  mantém a versão de regra no servidor e bloqueia configuração já aberta.
+- Contrato documentado no OpenAPI e em `feature-9-admin-api.md`.
+- TDD: seis testes de requisição vermelhos antes da implementação; verde
+  focal de oito exemplos com o contrato. Regressão completa executada por
+  Danilo: **279 exemplos, 0 falhas e 32 pendências legadas**, incluindo
+  configuração seguida da abertura do turno pela API.
+- Não foram adicionados models persistidos nem migrations neste ciclo.
+
 ## Por que foram criados novos models
 
 O protótipo antigo persiste `Vote` com referências a `Ballot` e `Candidate`.
