@@ -25,6 +25,10 @@ verde. Se o banco já existir, essa execução não constitui evidência de inst
 nova: registrar esse fato e escolher outro nome; não apagar bancos existentes.
 Não substituir db:migrate por carga do schema/structure ou db:prepare.
 
+Confirmado por Danilo em 30/09/2026: banco election_f9_acceptance_20260930
+criado, migrations executadas e regressão 346 exemplos, zero falhas e 32
+pendências legadas. Essa etapa está validada no PostgreSQL local do WSL.
+
 ## 2. Jornada em navegador na mesma origem
 
 Usar dados fictícios e um ambiente separado do uso escolar. Arquivos do

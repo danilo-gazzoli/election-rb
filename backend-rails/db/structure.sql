@@ -1,4 +1,4 @@
-\restrict BdKgAmQ7pp8hszq21cLcvc0DqHEjgP53cFgm4ezLLFdbhJaiqqbE3p18vUpIUcd
+\restrict Z0jAgeXegO4x786LmZC6SaDgR8oyB70OUgJ6vvRT6gsCXzJXYjeqp5NC9BLhnfD
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -689,8 +689,8 @@ CREATE TABLE public.cast_votes (
     origin character varying NOT NULL,
     candidacy_id bigint,
     party_id bigint,
-    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY (ARRAY[('blank'::character varying)::text, ('null'::character varying)::text])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
-    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY (ARRAY[('confirmation'::character varying)::text, ('abandonment'::character varying)::text])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
+    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY ((ARRAY['blank'::character varying, 'null'::character varying])::text[])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
+    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY ((ARRAY['confirmation'::character varying, 'abandonment'::character varying])::text[])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
 );
 
 
@@ -824,7 +824,7 @@ CREATE TABLE public.election_roles (
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY (ARRAY[('creator'::character varying)::text, ('pollworker'::character varying)::text])))
+    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY ((ARRAY['creator'::character varying, 'pollworker'::character varying])::text[])))
 );
 
 
@@ -1816,7 +1816,7 @@ ALTER TABLE ONLY public.voting_stages
 -- Name: idx_active_session_per_device; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY (ARRAY[('released'::character varying)::text, ('in_progress'::character varying)::text]));
+CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY ((ARRAY['released'::character varying, 'in_progress'::character varying])::text[]));
 
 
 --
@@ -2886,7 +2886,7 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict BdKgAmQ7pp8hszq21cLcvc0DqHEjgP53cFgm4ezLLFdbhJaiqqbE3p18vUpIUcd
+\unrestrict Z0jAgeXegO4x786LmZC6SaDgR8oyB70OUgJ6vvRT6gsCXzJXYjeqp5NC9BLhnfD
 
 SET search_path TO "$user", public;
 

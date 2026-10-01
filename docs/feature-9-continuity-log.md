@@ -1027,3 +1027,31 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   docs/feature-9-acceptance.md com os gates restantes, sem declarar piloto pronto.
 - Incremento será commitado localmente, mantendo a mesma feature branch.
   Nenhum push, alteração de PR ou merge até a entrega agrupada e validada.
+
+### Instalação nova — migrations e regressão confirmadas
+
+- Danilo enviou a criação de election_f9_acceptance_20260930, a execução da
+  cadeia de migrations desde 2025 e regressão final 346 exemplos, zero falhas,
+  32 pendências legadas. Isso valida a instalação nova no PostgreSQL local,
+  além das execuções anteriores em banco já existente.
+- O dump structure.sql foi regenerado por essa execução: mudaram marcadores
+  de pg_dump, apresentação equivalente dos casts de arrays e linha final.
+  Não foi introduzida nova tabela, constraint, função, índice ou migration.
+- Backend e 20 testes Node permanecem verdes nos resultados informados por
+  Danilo. Ensaio em navegador/mesma origem, som real, TLS e restauração ainda
+  não foram realizados. Nenhum teste ou migration executado pelo agente.
+- Próxima dependência operacional do ensaio: servidor Rack local que sirva
+  arquivos da interface e encaminhe API/Cable ao Rails na mesma origem,
+  com as rotas legadas fora da superfície exposta. Sem Docker ou pacote novo.
+  Testes desse adaptador precederão sua implementação.
+- Mantida a feature branch. Nenhum envio remoto, atualização de PR ou merge.
+
+### Servidor do ensaio — testes antes da implementação
+
+- Escritos oito testes Rack: página/módulos reais, raiz, proteção de arquivos,
+  bloqueio de rotas legadas, preservação de corpo/cookie/CSRF, encaminhamento
+  Cable, GET/HEAD e saúde real do Rails pela mesma origem.
+- Não existe ainda o adaptador deployment/feature9/same_origin_gateway.rb.
+  Danilo deve executar o vermelho antes da implementação. Os testes não fazem
+  conexão WebSocket real nem validam TLS ou navegador: validam o roteamento
+  e a conservação das informações exigidas pelos componentes existentes.
