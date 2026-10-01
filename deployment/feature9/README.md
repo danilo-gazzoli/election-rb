@@ -19,7 +19,7 @@ aguardam validação.
 ## Preparar um banco exclusivo para o ensaio em navegador
 
 ```sh
-cd /home/nilo/program/election-rb/backend-rails && env PATH=/home/nilo/.asdf/installs/ruby/3.2.0/bin:/usr/bin:/bin DB_HOST=/run/postgresql DB_USERNAME=nilo DB_NAME_DEV=election_f9_browser_20260930 RAILS_ENV=development bundle exec rails db:create db:migrate
+cd /home/nilo/program/election-rb/backend-rails && env PATH=/home/nilo/.asdf/installs/ruby/3.2.0/bin:/usr/bin:/bin DB_HOST=/run/postgresql DB_USERNAME=nilo DB_NAME_DEV=election_f9_browser_20260930 SKIP_TEST_DATABASE=true RAILS_ENV=development bundle exec rails db:create db:migrate
 ```
 
 Provisionar escola/contas e configuração da eleição conforme o
