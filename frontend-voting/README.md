@@ -14,8 +14,15 @@ pelo administrador; o mesário libera cada sessão após conferir a lista físic
 Teste executado por Danilo no WSL Arch:
 
 ```sh
-cd /home/nilo/program/election-rb/frontend-voting && "/mnt/c/Program Files/nodejs/node.exe" --test test/*.test.mjs
+cd /home/nilo/program/election-rb/frontend-voting && /home/nilo/.asdf/installs/nodejs/25.6.1/bin/node --test test/*.test.mjs
 ```
 
 Antes de um piloto, validar a jornada com Rails e frontend na mesma origem,
 incluindo pareamento, cookie, CSRF, WebSocket, som e telas pequenas/grandes.
+
+Requisitos e responsabilidades do recorte da tarefa 9:
+[ERS/SAP da interface](../docs/feature-9-frontend-ers-sap.md).
+
+Os testes app_session.test.mjs importam a aplicação com DOM, HTTP e WebSocket
+simulados. Eles verificam a ligação entre tela e fluxo, mas não substituem o
+ensaio em navegador real com Rails, cookies, CSRF, áudio e implantação.

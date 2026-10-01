@@ -212,3 +212,17 @@ na versão correta. Permanecem os limites de aceite do frontend e implantação.
   do cenário de isolamento e contrato), regressão final 346/0/32 pendências.
 - Isolamento corrigido no teste de sessão transferida; nenhuma ampliação da
   autenticação. Commit local, sem envio remoto ou merge nesta etapa.
+
+### Interface — isolamento de sessões e integração do cliente
+
+- VotingFlow acompanha a sessão anônima, limpa estado ao bloquear/trocar de
+  sessão, rejeita respostas antigas e recupera recibos para som sem duplicação.
+- app.js entrega o contexto da API ao fluxo e limpa a renderização antiga,
+  mesmo quando duas sessões reutilizam uma etapa. Nenhum voto é enviado no canal.
+- Acrescentados sete testes de fluxo e quatro da ligação com a tela, além do
+  harness de adaptadores simulados. Vermelhos 16/6 e 20/4; verde 20/0 informado
+  por Danilo. Nenhum teste executado pelo agente.
+- Documentados o recorte ERS/SAP, runtime Node Linux e roteiro de aceite.
+  Sem models, migrations ou dependências novas; sem alteração no Rails.
+- Limites: navegador real, áudio e implantação ainda não validados. O harness
+  não foi apresentado como teste ponta a ponta do produto.

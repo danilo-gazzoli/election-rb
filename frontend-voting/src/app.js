@@ -76,7 +76,14 @@ async function refresh() {
     if (status !== 200) throw new Error('Não foi possível consultar o estado da votação.');
     paired = true;
     connectUpdates();
-    flow.recover({ stageId: body.stage?.id ?? null, lastReceiptId: body.last_receipt_id });
+    const previousSessionId = flow.sessionId;
+    flow.recover({ sessionId: body.session_id ?? null, stageId: body.stage?.id ?? null,
+      lastReceiptId: body.last_receipt_id });
+    if (flow.sessionId !== previousSessionId) {
+      currentStageId = null;
+      message();
+    }
+    if (flow.shouldPlaySound()) playConfirmationSound();
     byId('status').textContent = body.state === 'locked' ? 'Dispositivo bloqueado' : 'Dispositivo liberado';
     if (body.stage && flow.panelFor(body.stage.id) === 'warning-panel') showPanel('warning-panel');
     else if (body.stage) showStage(body.stage);
@@ -122,12 +129,15 @@ async function confirm(acknowledgeWarning = false) {
   busy = true;
   byId('confirm-button').disabled = true;
   byId('confirm-null-button').disabled = true;
+  let commandContext;
   try {
     if (!flow.commandKey) flow.beginConfirmation(currentStageId, crypto.randomUUID());
+    commandContext = { sessionId: flow.sessionId, commandKey: flow.commandKey };
     const { status, body } = await api('voting-device/confirmations', {
       method: 'POST', body: JSON.stringify(flow.intent({ acknowledgeWarning }))
     });
-    const result = flow.acceptResponse(status, body);
+    const result = flow.acceptResponse(status, body, commandContext);
+    if (result === 'stale') return;
     if (result === 'warning') {
       showPanel('warning-panel');
     } else if (result === 'confirmed') {
@@ -138,7 +148,7 @@ async function confirm(acknowledgeWarning = false) {
       message(body?.error?.message || 'Não foi possível confirmar. Tente novamente.');
     }
   } catch {
-    flow.acceptResponse(0, null);
+    if (flow.acceptResponse(0, null, commandContext) === 'stale') return;
     message('Resposta não recebida. Repita a confirmação; o voto não será duplicado.');
   } finally {
     busy = false;

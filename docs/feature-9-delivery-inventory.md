@@ -119,3 +119,14 @@ Pendências atuais da tarefa 9: especificação/aceite integrado da interface,
 limpeza de estado local entre eleitores e validação da implantação. As linhas
 anteriores que descrevem a prévia como pendente são histórico dos incrementos.
 Não haverá atualização de PR ou merge antes da entrega agrupada.
+
+### Interface — isolamento e ligação validados em 30/09/2026
+
+Danilo confirmou 20 testes Node, zero falhas. O incremento limpa dados locais
+entre sessões anônimas, descarta respostas antigas e sinaliza o som de recibos
+recuperados. Inclui recorte ERS/SAP e testes do app com adaptadores simulados.
+Nenhum model, migration ou pacote novo foi necessário.
+
+Restam evidências de instalação nova e ensaio em navegador/mesma origem, áudio,
+TLS/WebSocket e restauração. Roteiro em feature-9-acceptance.md. Esses ensaios
+não foram executados pelo agente. Nenhum envio remoto ou merge por incremento.

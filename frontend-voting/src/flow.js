@@ -1,5 +1,6 @@
 export class VotingFlow {
   constructor() {
+    this.sessionId = null;
     this.selectedChoice = null;
     this.stageId = null;
     this.commandKey = null;
@@ -31,7 +32,10 @@ export class VotingFlow {
     };
   }
 
-  acceptResponse(status, body) {
+  acceptResponse(status, body, context) {
+    if (context && (context.sessionId !== this.sessionId || context.commandKey !== this.commandKey)) {
+      return 'stale';
+    }
     if (status === 409 && body?.error?.code === 'choice_warning') {
       this.warningRequired = true;
       return 'warning';
@@ -53,14 +57,25 @@ export class VotingFlow {
     this.selectedChoice = null;
   }
 
-  recover({ stageId, lastReceiptId }) {
-    if (this.stageId && this.stageId !== stageId && lastReceiptId) {
-      this.selectedChoice = null;
-      this.stageId = null;
-      this.commandKey = null;
-      this.warningRequired = false;
-      this.lastReceiptId = lastReceiptId;
-    }
+  clearSelection() {
+    this.selectedChoice = null;
+    this.stageId = null;
+    this.commandKey = null;
+    this.warningRequired = false;
+  }
+
+  recover({ sessionId, stageId, lastReceiptId }) {
+    const identified = sessionId !== undefined;
+    const newSession = identified && sessionId !== null && sessionId !== this.sessionId;
+    const advanced = this.stageId !== null && this.stageId !== stageId;
+    const recoveredReceipt = identified && this.sessionId !== null && !newSession && advanced &&
+      this.commandKey && lastReceiptId && lastReceiptId !== this.lastReceiptId;
+
+    if (newSession || !stageId || advanced) this.clearSelection();
+    if (newSession || !stageId) this.pendingSoundReceipt = null;
+    if (identified) this.sessionId = sessionId;
+    if (identified || (advanced && lastReceiptId)) this.lastReceiptId = lastReceiptId ?? null;
+    if (recoveredReceipt) this.pendingSoundReceipt = lastReceiptId;
   }
 
   panelFor(stageId) {

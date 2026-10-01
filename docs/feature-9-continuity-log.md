@@ -949,3 +949,81 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
 - A prévia está validada no backend. O ensaio em navegador e a implantação
   continuam sem validação. Permanecem a mesma branch, TDD executado por Danilo
   e a orientação de nenhum push/PR/merge por incremento.
+
+### Interface — recorte de requisitos e vermelho de isolamento
+
+- Criado docs/feature-9-frontend-ers-sap.md, derivado da ERS/SDD gerais e dos
+  contratos existentes. Define o recorte de votação da tarefa 9, responsabilidades
+  de cliente/backend e critérios de aceite, sem ampliar para o MVP inteiro.
+- Escritos sete testes de isolamento/recuperação: seleção não enviada, abandono
+  sem recibo, nova sessão com mesma etapa, reenvio preservado, resposta atrasada
+  e som após confirmação recuperada. Produção do frontend ainda não alterada;
+  aguarda vermelho enviado por Danilo.
+- A interface já recebe session_id anônimo, mas não o usa no VotingFlow.
+  O identificador ficará apenas em memória e não representa cadastro de eleitor.
+  Limpeza/recuperação se orientam ao estado confirmado pelo servidor.
+- O commit local b2f7bef agrupa a prévia validada, sem envio remoto. Ensaios em
+  navegador, arquivo autorizado do som característico e implantação continuam
+  pendentes; testes Node isolados não serão apresentados como aceite completo.
+
+### Interface — isolamento implementado após seis falhas
+
+- Danilo executou 16 testes Node: dez passaram e seis novos falharam nos
+  comportamentos previstos. Após esse vermelho, VotingFlow passou a comparar
+  session_id anônimo, limpar seleção/aviso/comando ao bloquear ou trocar de
+  sessão, ignorar respostas com contexto antigo e sinalizar som para um
+  recibo recuperado inequivocamente da operação pendente.
+- As escolhas e o identificador de sessão permanecem em memória da página.
+  Sem mudanças no backend, migrations, armazenamento persistente ou WebSocket.
+- A ligação do fluxo com app.js ainda não foi alterada: escritos quatro
+  testes de tela que importam o app real com DOM/HTTP/WebSocket simulados.
+  Cobrem aviso/seleção de nova sessão, som recuperado e resposta atrasada.
+  Aguardam vermelho enviado por Danilo antes da alteração de app.js.
+- Esses testes verificam integração do código cliente com adaptadores
+  simulados; não equivalem a navegador real, API real, áudio, acessibilidade
+  ou aceite de implantação. Esses ensaios continuam pendentes.
+- O Node Windows não pôde ser executado por interop do WSL. O runtime Linux
+  /home/nilo/.asdf/installs/nodejs/25.6.1/bin/node foi verificado com --version;
+  Danilo executou nele os testes. Nenhum teste foi executado pelo agente.
+- Próximo comando reúne o verde esperado do fluxo e o vermelho esperado dos
+  quatro casos da tela. Sem commit, push, alteração de PR ou merge neste passo.
+
+### Interface — ligação com a tela após quatro falhas confirmadas
+
+- Danilo confirmou 20 testes: 16 passaram, incluindo os sete casos de
+  isolamento/recuperação; os quatro casos novos de app.js falharam nos pontos
+  previstos. Nenhuma falha anterior permaneceu no fluxo de domínio do cliente.
+- Depois desse vermelho, app.js passou a entregar session_id ao VotingFlow
+  e invalidar a renderização anterior quando a sessão muda, mesmo com o mesmo
+  ID de etapa. Isso remove seleção/aviso antigos da nova cédula apresentada.
+- A tela reproduz o som sinalizado por um recibo recuperado e mantém o contexto
+  local de sessão/comando de cada confirmação. Resposta ou erro tardio desse
+  contexto é descartado quando o fluxo já passou para outra sessão/etapa.
+  O contexto não é acrescentado à requisição nem enviado ao WebSocket.
+- Alterado apenas app.js neste passo de produção. Aguardar Danilo executar
+  o verde dos 20 testes; não houve testes pelo agente, alterações de backend,
+  migrations, commit, push, atualização de PR ou merge.
+- Permanecem os limites: adaptadores simulados não validam navegador real,
+  política de áudio, cookies reais, acessibilidade ou implantação. O recorte
+  de ERS/SAP está em docs/feature-9-frontend-ers-sap.md.
+
+### Interface — verde confirmado e validação da instalação
+
+- Danilo confirmou 20 testes Node, todos passando: sete testes anteriores de
+  fluxo, dois de WebSocket, sete de isolamento/recuperação e quatro de ligação
+  com a tela usando adaptadores simulados. O TDD do incremento teve 16/6 e
+  depois 20/4 antes do verde final 20/0.
+- Confirmadas limpeza entre sessões, aviso preservado na sessão correta,
+  descarte de resposta atrasada e som sinalizado uma única vez por recibo
+  confirmado/recuperado. Backend continua no resultado informado 346/0,
+  com 32 pendências legadas; não foi alterado neste incremento.
+- Requisitos e responsabilidades do cliente documentados no recorte ERS/SAP.
+  Nenhum model persistido, migration ou dependência de pacote foi acrescentado.
+- Aguardar Danilo aplicar a cadeia completa de migrations num banco novo e
+  executar nele a regressão. Usar db:create db:migrate explicitamente, pois
+  carregar structure/schema não prova que a cadeia histórica é executável.
+- Testes de tela com simulação não substituem ensaio em navegador/mesma origem,
+  verificação de som real, TLS/WebSocket e backup/restauração. Preparado roteiro
+  docs/feature-9-acceptance.md com os gates restantes, sem declarar piloto pronto.
+- Incremento será commitado localmente, mantendo a mesma feature branch.
+  Nenhum push, alteração de PR ou merge até a entrega agrupada e validada.
