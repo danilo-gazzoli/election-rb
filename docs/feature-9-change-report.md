@@ -178,3 +178,25 @@ Validação final do incremento de partidos: Danilo aplicou as duas migrations
 no banco de teste e confirmou **306 exemplos, 0 falhas, 32 pendências legadas**
 na suíte completa. Os 27 novos exemplos cobrem API, integridade e contrato.
 Não foram adicionadas entidades persistidas, nem alterado o frontend.
+
+## Incremento de eleição e agenda do primeiro turno (30/09/2026)
+
+- Configuration::ManageElection e Admin::ElectionsController implementam
+  cadastro/leitura/listagem/edição, autorização, agenda, auditoria e versão.
+- User recebe can_create_elections via migration, false por padrão; somente
+  provisionamento local pode conceder a permissão. Nenhuma conta foi promovida.
+- Election usa o fuso da escola para validar a data em eleições do novo domínio.
+- CreateContest e ManageParty incrementam configuration_version atomicamente.
+- ElectionsController legado só acessa registros sem instalação para impedir
+  que contorne as proteções do novo domínio.
+- Migration adicional congela configuração e agenda após abertura no PostgreSQL.
+- OpenAPI e seu inventário foram atualizados. Testes escritos antes das
+  respectivas correções; verde inicial confirmado por Danilo (22 casos).
+- Verificação final aguarda Danilo, incluindo jornada de configuração/abertura
+  com os IDs retornados pela API. Nenhum teste foi executado pelo agente.
+
+Validação final de eleição/agenda: Danilo confirmou **334 exemplos, 0 falhas,
+32 pendências legadas**. Foram adicionados 28 exemplos e duas migrations;
+nenhum novo model persistido. O teste de integração HTTP configura a eleição,
+partido e disputa e abre o turno somente com IDs da API, verificando snapshot
+na versão correta. Permanecem os limites de aceite do frontend e implantação.

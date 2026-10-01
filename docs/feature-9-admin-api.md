@@ -72,3 +72,50 @@ contrato OpenAPI foram implementados após esse vermelho. Danilo aplicou a
 segunda migration e confirmou o verde na suíte completa: **306 exemplos,
 0 falhas e 32 pendências legadas**. Esta evidência valida o backend; não
 substitui o aceite integrado da interface ou a migração dos dados antigos.
+
+## Configuração da eleição — contrato implementado e validado
+
+Base: ERS RF-01 a RF-04, RF-10, RF-13 e RF-39; SDD 3.3, 4 e 7.
+GET/POST /api/v1/admin/elections e GET/PATCH /api/v1/admin/elections/{id}.
+
+Criação exige conta ativa provisionada com `can_create_elections`; não há
+endpoint para conceder essa permissão. A nova eleição pertence à instalação e
+ao usuário autenticados e recebe o papel de criador na mesma transação.
+Consulta/edição exigem papel ativo de criador nessa eleição e mesma instalação.
+
+Corpo election: title, description, timezone, opens_at e closes_at. Datas
+ISO 8601 com offset explícito ou Z; fuso reconhecido pelo Rails. A criação
+produz eleição e primeiro turno em rascunho, agenda futura e tolerância fixa de
+10 minutos, além da auditoria. Os campos legados de calendário são derivados
+da agenda do turno; election_day usa o dia da abertura no fuso da eleição.
+IDs de escola/criador, estado, tolerância e permissões não são aceitos do cliente.
+
+Edição aceita campos parciais e exige configuration_version inteiro. Sob lock
+da eleição e de seus turnos, uma versão obsoleta devolve 409 stale_configuration;
+campos inválidos, 422 invalid_configuration. Alteração de eleição, disputa ou
+partido incrementa a versão nessa mesma transação. Turno aberto/suspenso/encerrado/
+anulado bloqueia edição. Rotas legadas não podem editar/excluir eleições do novo
+domínio. Consulta continua disponível depois da abertura.
+
+Resposta de detalhe: id, title, description, timezone, state, configuration_version
+e first_round (id, number, opens_at, closes_at, grace_until). Lista retorna elections.
+O estado usa o turno atual, sem expor contas, sessões ou credenciais. Esse ciclo
+não implementa prévia, segundo turno ou novas transições de abertura/encerramento.
+Verificação: 24 exemplos de requisição (incluindo a jornada da criação até
+a abertura somente com IDs retornados pela API), dois de integridade e dois
+de contrato. Danilo confirmou o vermelho antes das implementações e a
+regressão final: **334 exemplos, 0 falhas, 32 pendências legadas**.
+
+### Provisionamento da permissão de criar eleições
+
+Após migrar o banco do ambiente correto, o operador da escola deve conceder
+can_create_elections somente à conta ativa e à instalação conferidas. Esta
+permissão não é aceita pela API. Exemplo de operação local (substituir as duas
+variáveis pelos identificadores reais; não há senha ou segredo no comando):
+
+```sh
+SCHOOL_ID=identificador-da-escola CREATOR_LOGIN=login-do-professor bundle exec rails runner 'school = SchoolInstallation.find_by!(identifier: ENV.fetch("SCHOOL_ID")); user = User.find_by!(school_installation: school, login: ENV.fetch("CREATOR_LOGIN"), active: true); user.update!(can_create_elections: true)'
+```
+
+Não usar o banco de teste para provisionar a conta de desenvolvimento ou de
+produção. A migration não promove automaticamente contas antigas ou mesários.

@@ -1,4 +1,4 @@
-\restrict fEKuf6FmzjzfjgesPyFPvhtkMNv6j11FRK6ll0uVFepu9Q2QRB2eRi9g9l4wvJo
+\restrict BdKgAmQ7pp8hszq21cLcvc0DqHEjgP53cFgm4ezLLFdbhJaiqqbE3p18vUpIUcd
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -220,6 +220,29 @@ $$;
 
 
 --
+-- Name: protect_election_configuration(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_election_configuration() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF OLD.school_installation_id IS NOT NULL THEN
+    PERFORM 1 FROM rounds WHERE election_id = OLD.id ORDER BY id FOR SHARE;
+    IF EXISTS (
+      SELECT 1 FROM rounds WHERE election_id = OLD.id
+      AND state IN ('open', 'suspended', 'closed', 'annulled')
+    ) THEN
+      RAISE EXCEPTION 'election configuration is immutable';
+    END IF;
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: protect_owned_party_catalog(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -246,6 +269,23 @@ BEGIN
     AND state IN ('open', 'suspended', 'closed', 'annulled')
   ) THEN
     RAISE EXCEPTION 'election-owned party catalog is immutable';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: protect_round_agenda(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_round_agenda() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF OLD.state IN ('open', 'suspended', 'closed', 'annulled') THEN
+    RAISE EXCEPTION 'round agenda is immutable';
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
@@ -1194,7 +1234,8 @@ CREATE TABLE public.users (
     password_digest character varying NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    can_create_elections boolean DEFAULT false NOT NULL
 );
 
 
@@ -2339,6 +2380,13 @@ CREATE TRIGGER contest_catalog_immutable BEFORE DELETE OR UPDATE ON public.conte
 
 
 --
+-- Name: elections election_configuration_protected; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER election_configuration_protected BEFORE DELETE OR UPDATE OF title, description, timezone, start_time, end_time, election_day, configuration_version, school_installation_id, creator_id ON public.elections FOR EACH ROW EXECUTE FUNCTION public.protect_election_configuration();
+
+
+--
 -- Name: parties owned_party_catalog_protected; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2364,6 +2412,13 @@ CREATE TRIGGER party_registration_immutable BEFORE DELETE OR UPDATE ON public.el
 --
 
 CREATE TRIGGER party_registration_insert_frozen BEFORE INSERT ON public.election_party_registrations FOR EACH ROW EXECUTE FUNCTION public.deny_late_round_catalog_insert();
+
+
+--
+-- Name: rounds round_agenda_protected; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER round_agenda_protected BEFORE DELETE OR UPDATE OF election_id, number, opens_at, closes_at, grace_until ON public.rounds FOR EACH ROW EXECUTE FUNCTION public.protect_round_agenda();
 
 
 --
@@ -2831,11 +2886,13 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fEKuf6FmzjzfjgesPyFPvhtkMNv6j11FRK6ll0uVFepu9Q2QRB2eRi9g9l4wvJo
+\unrestrict BdKgAmQ7pp8hszq21cLcvc0DqHEjgP53cFgm4ezLLFdbhJaiqqbE3p18vUpIUcd
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930130000'),
+('20260930120000'),
 ('20260930110000'),
 ('20260930100000'),
 ('20260927160000'),

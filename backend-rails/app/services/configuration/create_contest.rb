@@ -24,6 +24,7 @@ module Configuration
                                       principal_party_id: entry[:principal_party_id],
                                       ballot_number: entry[:ballot_number])
         end
+        election.update_columns(configuration_version: election.configuration_version + 1, updated_at: Time.current)
         AuditEvent.create!(election: election, user: actor, action: 'contest_create',
                            result: 'success', occurred_at: Time.current)
         contest

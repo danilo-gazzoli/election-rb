@@ -88,3 +88,21 @@ Continuam pendentes: configuração de eleição/agenda e prévia pela API,
 requisitos e aceite integrado do frontend, validação de implantação e conversão
 dos registros legados compartilhados. O incremento de partidos não implementa
 federações nem encerra a issue #25.
+
+## Atualização verificada em 30/09/2026 — eleição e agenda
+
+Esta atualização substitui as pendências de configuração da eleição/agenda e
+as contagens anteriores. GET/POST de eleições e GET/PATCH de detalhe estão
+implementados. O cadastro cria primeiro turno, papel de criador e auditoria;
+a edição exige versão atual e sincroniza agenda com calendário legado.
+Permissão de criação é provisionada localmente, sem endpoint de autopromoção.
+Mudanças em eleição, disputa ou partido incrementam a versão atomicamente.
+
+As proteções do PostgreSQL congelam configuração/agenda após abertura. Fuso
+escolar determina a data e a tolerância é de dez minutos. OpenAPI documentado.
+Danilo confirmou **334 exemplos, 0 falhas, 32 pendências legadas**, incluindo a
+jornada de configuração seguida da abertura somente com identificadores da API.
+
+Permanecem prévia pela API, requisitos/aceite integrado da interface e validação
+de implantação. Segundo turno, federações e migração automática de registros
+legados compartilhados não foram entregues neste incremento.

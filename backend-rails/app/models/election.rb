@@ -51,7 +51,9 @@ class Election < ApplicationRecord
       return
     end
 
-    return unless election_day < Time.zone.today
+    zone = ActiveSupport::TimeZone[timezone] if school_installation_id.present? && timezone.present?
+    today = zone ? Time.current.in_time_zone(zone).to_date : Time.zone.today
+    return unless election_day < today
 
     errors.add(:election_day, 'must be a future date')
   end

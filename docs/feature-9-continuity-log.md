@@ -790,3 +790,92 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   agenda, prévia e requisitos/aceite integrado da interface; federações e
   migração automática dos partidos legados não foram entregues por este ciclo.
 - Próxima ação: commit na branch atual e atualização do PR #31 para develop.
+
+## Eleição e agenda do primeiro turno — início do TDD
+
+- Escrito spec/requests/api_v1_election_configuration_spec.rb para cadastro,
+  consulta, edição, provisionamento do criador, isolamento/autorização, fuso,
+  calendário, agenda com dez minutos de tolerância, auditoria, rollback,
+  controle de versão, bloqueio após abertura e proteção das rotas legadas.
+- O incremento também exige invalidar versões antigas após alterar disputa ou
+  partido, para manter o controle de configuração coerente entre as operações.
+- Mesários não recebem permissão de criar eleições por envio de parâmetros.
+  A permissão inicial deve ser concedida pelo procedimento de provisionamento.
+- Somente testes e contrato foram escritos. Próximo passo: Danilo executa o
+  vermelho; nenhuma produção/migration foi alterada nesta etapa.
+
+### Eleição — vermelho confirmado e implementação inicial
+
+- Danilo confirmou **22 exemplos, 22 falhas**, por rotas ausentes e pela
+  permissão can_create_elections inexistente no User.
+- Implementados Configuration::ManageElection, Admin::ElectionsController e
+  quatro rotas. Criação transacional inclui eleição, primeiro turno, papel de
+  criador e auditoria. Edição parcial sincroniza a agenda e campos legados,
+  valida fuso/offset explícito e exige versão inteira sob lock da configuração.
+- Migration 20260930120000_add_election_creation_permission adiciona apenas
+  um booleano ao User, false por padrão; autorização por eleição continua via
+  ElectionRole. Não foi concedida permissão a nenhuma conta pelo agente.
+- CreateContest e ManageParty incrementam a versão na mesma transação para
+  impedir que edição da eleição sobrescreva configuração previamente alterada.
+  Rotas legadas de eleição passam a consultar apenas registros sem instalação.
+- Para completar o mesmo incremento, foram escritos cinco novos testes:
+  virada do dia UTC versus fuso escolar, congelamento da eleição/agenda no
+  PostgreSQL e os dois contratos OpenAPI. As correções desses casos aguardam
+  sua fase vermelha, junto da verificação verde dos primeiros 22 exemplos.
+- Próximo passo: Danilo aplica a migration de permissão e executa os 27 testes
+  focais; confirmar os resultados antes das últimas correções. Nenhuma suíte
+  nem migration foi executada pelo agente.
+
+### Eleição — 22 casos verdes e cinco correções após vermelho
+
+- Danilo aplicou a migration de permissão e confirmou **27 exemplos, 5 falhas**;
+  os 22 exemplos iniciais passaram. Falhas remanescentes eram fuso escolar na
+  virada do dia UTC, duas proteções de banco e duas descrições OpenAPI.
+- Election calcula hoje no fuso configurado para eleições da instalação;
+  legados sem instalação preservam Time.zone.today. Isso corrige o falso erro
+  de data passada quando a agenda futura ainda é hoje na escola.
+- Migration 20260930130000_protect_election_configuration congela atributos
+  de configuração da eleição e agenda do turno após abertura. Alterações de
+  estado do turno feitas pelos comandos existentes não mudam a agenda e
+  continuam permitidas. Os gatilhos protegem escrita direta no PostgreSQL.
+- OpenAPI descreve os quatro endpoints, envelope election, agenda/versão,
+  permissão provisionada, autorização e respostas. Inventário anterior de
+  contrato atualizado para não marcar operações existentes como planned.
+- Risco concreto identificado por leitura do serializer: first_round não
+  retorna id, necessário ao endpoint de abertura. Foi escrito um teste de
+  jornada que cria eleição, partido e disputa e abre o turno usando somente
+  IDs da API. Sua correção ainda aguarda vermelho; não foi antecipada.
+- Próximo passo: Danilo aplica a migration e roda a suíte completa para
+  verificar as cinco correções e o vermelho da jornada antes do ajuste final.
+
+### Eleição — ajuste final do identificador retornado
+
+- Danilo aplicou a proteção de configuração/agenda e enviou a regressão:
+  **334 exemplos, 1 falha, 32 pendências legadas**. A única falha era
+  first_round.id ausente, exatamente no novo teste da jornada pela API.
+  Os cinco casos do ciclo anterior passaram nessa execução.
+- Após esse vermelho, serializer e schema FirstRoundAgenda passaram a retornar
+  e documentar id. Não houve outra mudança no fluxo ou nas restrições.
+- Próximo passo: Danilo executa a suíte completa novamente para confirmar a
+  jornada restante e a regressão após essa mudança de contrato. Sem nova
+  migration; sem commit ou push até o resultado verde.
+
+### Eleição e agenda — regressão final confirmada
+
+- Danilo confirmou **334 exemplos, 0 falhas, 32 pendências legadas** na suíte
+  Rails completa. A jornada agora cria eleição, partido e disputa, abre o turno
+  no horário configurado e verifica duas etapas e snapshot na versão correta,
+  usando somente identificadores retornados pela API.
+- Incremento acrescenta 28 exemplos: 24 requisições, dois de integridade e dois
+  de contrato. Vermelhos: 22/22, depois 27/5 e regressão 334/1; cada correção
+  de produção veio depois do respectivo resultado enviado por Danilo.
+- Eleição e agenda do primeiro turno estão implementadas e validadas no backend.
+  Nenhuma conta foi promovida, nem testes executados pelo agente. Provisionamento
+  de can_create_elections está documentado no contrato da administração.
+- Não foram criados novos models persistidos; acrescentado um booleano ao User
+  e proteções PostgreSQL em duas migrations. Ambas foram aplicadas por Danilo
+  no banco de teste existente; cadeia completa em banco novo não reexecutada.
+- Restam na tarefa 9: prévia pela API, requisitos/aceite integrado do frontend
+  e validação de implantação. Federações, segundo turno e conversão automática
+  do legado não são entregas deste incremento. Próxima ação: commit na branch
+  atual e atualização do PR #31 para develop, mantendo a issue #25 aberta.

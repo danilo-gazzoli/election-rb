@@ -31,6 +31,7 @@ module Configuration
         else
           raise ArgumentError, 'unsupported party operation'
         end
+        election.update_columns(configuration_version: election.configuration_version + 1, updated_at: Time.current)
         AuditEvent.create!(election: election, user: actor, action: "party_#{operation}",
                            result: 'success', occurred_at: Time.current)
         party

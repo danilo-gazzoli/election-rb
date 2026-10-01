@@ -28,6 +28,8 @@ RSpec.describe 'API v1 operation inventory' do
     expect(paths.dig('/api/v1/health', 'get', 'x-implementation-status')).to eq('implemented')
 
     implemented = {
+      '/api/v1/admin/elections' => 'post',
+      '/api/v1/admin/elections/{id}' => 'get',
       '/api/v1/auth/session' => 'get',
       '/api/v1/auth/login' => 'post',
       '/api/v1/auth/logout' => 'post',
@@ -44,8 +46,6 @@ RSpec.describe 'API v1 operation inventory' do
     end
 
     planned = {
-      '/api/v1/admin/elections' => 'post',
-      '/api/v1/admin/elections/{id}' => 'get',
       '/api/v1/admin/elections/{id}/preview' => 'post'
     }
 
