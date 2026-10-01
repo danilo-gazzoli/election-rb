@@ -43,6 +43,35 @@ RSpec.describe Voting::Release do
     described_class.call(round: round, device: device, actor: actor)
   end
 
+  it 'keeps a committed release successful when the notification transport fails' do
+    allow(ActionCable.server).to receive(:broadcast).and_raise(IOError, 'transport unavailable')
+
+    released = nil
+    expect { released = described_class.call(round: round, device: device, actor: actor) }.not_to raise_error
+    expect(released.id).to eq(VotingSession.sole.id)
+    expect(device.reload.state).to eq('released')
+    expect(AuditEvent.where(action: 'device_release').count).to eq(1)
+  end
+
+  it 'rejects release when the device has an active session in another election' do
+    other_election = Election.create!(
+      school_installation: installation, title: 'Another Election',
+      description: 'Another independent school election', start_time: 1.day.from_now,
+      end_time: 2.days.from_now, election_day: 1.day.from_now.to_date
+    )
+    other_round = Round.create!(election: other_election, number: 1, state: 'open',
+                                opens_at: 1.minute.ago, closes_at: 1.hour.from_now,
+                                grace_until: 70.minutes.from_now)
+    original = VotingSession.create!(round: other_round, voting_device: device, released_at: Time.current)
+    device.update!(state: 'released')
+
+    expect { described_class.call(round: round, device: device, actor: actor) }
+      .to raise_error(Voting::Release::NotAllowed)
+    expect(VotingSession.sole.id).to eq(original.id)
+    expect(original.reload.state).to eq('released')
+    expect(AuditEvent.where(action: 'device_release')).to be_empty
+  end
+
   it 'rejects an unauthorized actor and a closed round' do
     outsider = User.create!(school_installation: installation, name: 'Outsider', login: 'outsider',
                             password: 'long-random-password')

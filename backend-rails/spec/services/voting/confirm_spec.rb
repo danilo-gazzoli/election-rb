@@ -117,6 +117,31 @@ RSpec.describe Voting::Confirm do
     confirm(second_stage, first_candidate, 'cmd-2', acknowledged: true)
   end
 
+  it 'returns the durable receipt and permits replay when the notification transport fails' do
+    allow(ActionCable.server).to receive(:broadcast).and_raise(IOError, 'transport unavailable')
+    result = nil
+
+    expect { result = confirm(first_stage, first_candidate, 'cmd-1') }.not_to raise_error
+    expect(result.status).to eq(:confirmed)
+    expect(confirm(first_stage, first_candidate, 'cmd-1').receipt_id).to eq(result.receipt_id)
+    expect(CastVote.count).to eq(1)
+    expect(ConfirmationReceipt.count).to eq(1)
+    expect(session.reload.current_stage_position).to eq(2)
+  end
+
+  it 'preserves a committed abandonment when the notification transport fails' do
+    confirm(first_stage, first_candidate, 'cmd-1')
+    allow(ActionCable.server).to receive(:broadcast).and_raise(IOError, 'transport unavailable')
+
+    expect { Voting::Abandon.call(session: session, reason: 'voter left') }.not_to raise_error
+    expect(session.reload.state).to eq('abandoned')
+    expect(session.first_choice_fingerprint).to be_nil
+    expect(device.reload.state).to eq('locked')
+    expect(CastVote.where(kind: 'nominal', candidacy: first_candidate).count).to eq(1)
+    expect(CastVote.where(kind: 'null', origin: 'abandonment').count).to eq(1)
+    expect(ConfirmationReceipt.count).to eq(1)
+  end
+
   it 'keeps distinct second candidacies nominal and clears transient progress' do
     confirm(first_stage, first_candidate, 'cmd-1')
     confirm(second_stage, second_candidate, 'cmd-2')

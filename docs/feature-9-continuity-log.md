@@ -658,3 +658,32 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
 - Danilo confirmou o teste focal após a correção (**1 exemplo, 0 falhas**)
   e a regressão completa final (**269 exemplos, 0 falhas, 32 pendências
   legadas**). Os testes do frontend terminaram com **9 testes, 0 falhas**.
+
+## Retomada de 30/09/2026 — proteção do fluxo confirmado
+
+- Branch verificada: `feature/two-choice-majoritarian`, sem mudanças locais
+  antes desta retomada. Base anterior: commit `aadeb5a`.
+- Inspeção identificou duas lacunas: falha de transporte Action Cable ocorre
+  depois do commit e propaga erro ao chamador; liberação repetida reutiliza
+  sessão ativa de outro turno sem verificar seu vínculo com o turno pedido.
+- Foram escritos quatro testes em `release_spec.rb` e `confirm_spec.rb` para
+  confirmação, abandono e liberação preservados diante de `IOError` do
+  transporte; e rejeição de liberação com sessão de outra eleição.
+- Rastreabilidade: ERS RF-18, RF-21, RF-23, RF-25 e RF-27; SDD PostgreSQL
+  como autoridade e WebSocket como notificação. Não há nova entidade ou
+  mudança de esquema proposta para esta correção.
+- Danilo confirmou a fase vermelha: **29 exemplos, 4 falhas**, exatamente
+  os quatro casos novos. Nenhuma falha foi descartada ou marcada pendente.
+- Correção mínima: `NotifyDeviceState` concentra o envio do aviso e captura
+  erros apenas desse envio. O log contém somente a classe da exceção, sem
+  mensagem do transporte, escolha ou sessão. Erros de gravação continuam
+  propagando e provocando rollback. Release verifica o turno da sessão ativa
+  sob o lock do dispositivo antes de reutilizá-la.
+- Verde focal confirmado por Danilo: **29 exemplos, 0 falhas**. Regressão
+  completa confirmada por Danilo: **273 exemplos, 0 falhas, 32 pendências
+  legadas**. Nenhuma execução de testes foi feita pelo agente nesta retomada.
+- **Ponto de retomada:** este ciclo está validado. A entrega completa de F9
+  ainda requer fechar o fluxo de configuração administrativa e o aceite
+  integrado da interface. Testes do protótipo frontend não equivalem ao
+  aceite da interface completa. O histórico anterior de falha SSH no push
+  não foi resolvido por esta correção.

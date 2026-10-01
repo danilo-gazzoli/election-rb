@@ -18,6 +18,8 @@ module Voting
 
         device.with_lock do
           active = device.voting_sessions.find_by(state: %w[released in_progress])
+          raise NotAllowed, 'device has an active session in another round' if active && active.round_id != round.id
+
           next active if active
 
           raise NotAllowed, 'device is unavailable' if device.state == 'unavailable'
@@ -30,7 +32,7 @@ module Voting
           session
         end
       end
-      ActionCable.server.broadcast("voting_device:#{device.id}", { event: 'state_changed' }) if created
+      NotifyDeviceState.call(device_id: device.id) if created
       session
     end
   end

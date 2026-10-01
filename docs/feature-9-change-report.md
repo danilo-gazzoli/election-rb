@@ -4,6 +4,21 @@
 **Estado:** trabalho em andamento; ainda não pronto para mesclagem
 **Base funcional:** ERS v0.1 e SDD v0.1 da simulação eleitoral escolar
 
+## Correção de segurança e recuperação — 30/09/2026
+
+- `Voting::Release`: rejeita reutilizar sessão ativa de outro turno, mantendo
+  a repetição da liberação idempotente quando o turno é o mesmo.
+- `Voting::NotifyDeviceState`: concentra a notificação operacional sem
+  transmitir escolha ou sessão. Uma falha de notificação não transforma uma
+  gravação concluída em resposta de erro; o dispositivo consulta o estado
+  persistido para recuperar a atualização.
+- `Voting::Confirm` e `Voting::Abandon`: usam o notificador após a operação
+  transacional; falhas de persistência continuam provocando rollback.
+- Nenhum model persistido ou migration foi adicionado nesta correção.
+- TDD executado por Danilo: 29 exemplos, 4 falhas antes da implementação;
+  29 exemplos, 0 falhas depois. Regressão completa: **273 exemplos,
+  0 falhas e 32 pendências legadas**.
+
 ## Por que foram criados novos models
 
 O protótipo antigo persiste `Vote` com referências a `Ballot` e `Candidate`.

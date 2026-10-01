@@ -52,7 +52,7 @@ module Voting
         committed = true
         confirmed(receipt)
       end
-      ActionCable.server.broadcast("voting_device:#{@session.voting_device_id}", { event: 'state_changed' }) if committed
+      NotifyDeviceState.call(device_id: @session.voting_device_id) if committed
       result
     end
 

@@ -33,7 +33,7 @@ module Voting
         changed = true
         session
       end
-      ActionCable.server.broadcast("voting_device:#{session.voting_device_id}", { event: 'state_changed' }) if changed
+      NotifyDeviceState.call(device_id: session.voting_device_id) if changed
       result
     end
   end
