@@ -3,7 +3,7 @@
 module Voting
   class PartialResult
     def self.call(round_contest:)
-      round = round_contest.round
+      round = round_contest.round.reload
       contest = round_contest.contest
       votes = CastVote.where(round_id: round.id, contest_id: contest.id)
       kind_counts = votes.group(:kind).count
@@ -16,7 +16,7 @@ module Voting
                                     .pluck(:candidacy_id)
 
       {
-        status: 'partial',
+        status: round.state == 'annulled' ? 'annulled' : 'partial',
         participation: VotingSession.where(round_id: round.id).where.not(started_at: nil).count,
         confirmations: ConfirmationReceipt.joins(:voting_stage)
                                           .where(voting_stages: { round_contest_id: round_contest.id }).count,

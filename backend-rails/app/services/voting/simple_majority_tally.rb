@@ -3,9 +3,10 @@
 module Voting
   class SimpleMajorityTally
     def self.call(round_contest:)
-      round = round_contest.round
+      round = round_contest.round.reload
       contest = round_contest.contest
       raise ArgumentError, 'wrong tally method' unless contest.method == 'simple_majority'
+      return { status: 'annulled', reason: 'round is annulled' } if round.state == 'annulled'
       raise ArgumentError, 'round is not closed' unless round.state == 'closed'
 
       votes = CastVote.where(round_id: round.id, contest_id: contest.id)

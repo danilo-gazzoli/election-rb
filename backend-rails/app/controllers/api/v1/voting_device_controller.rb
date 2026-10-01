@@ -37,7 +37,10 @@ module Api
         stage = if active && round_state == 'open'
                   VotingStage.find_by(round_id: active.round_id, global_position: active.current_stage_position)
                 end
-        receipt_session = latest if latest && %w[released in_progress completed].include?(latest.state)
+        receipt_session = latest if latest && (
+          %w[released in_progress completed].include?(latest.state) ||
+          (latest.state == 'cancelled' && round_state == 'annulled')
+        )
         last_receipt = receipt_session&.confirmation_receipts&.order(confirmed_at: :desc)&.first
         render json: { state: device.state, round_state: round_state, session_id: active&.id,
                        next_stage_position: active&.current_stage_position,

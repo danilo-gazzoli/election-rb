@@ -34,6 +34,21 @@ module Api
           render_api_error(code: 'round_resume_denied', message: e.message, status: :conflict)
         end
 
+        def annul
+          round = Round.find(params[:id])
+          return unless require_role!(round.election, 'creator')
+
+          ::Voting::AnnulRound.call(round: round, actor: current_user, reason: params[:reason],
+                                   confirmed: params[:confirmed])
+          render json: { state: round.state }
+        rescue ::Voting::AnnulRound::InvalidReason => e
+          render_api_error(code: 'invalid_reason', message: e.message, status: :unprocessable_entity)
+        rescue ::Voting::AnnulRound::InvalidConfirmation => e
+          render_api_error(code: 'confirmation_required', message: e.message, status: :unprocessable_entity)
+        rescue ::Voting::AnnulRound::NotAllowed => e
+          render_api_error(code: 'round_annul_denied', message: e.message, status: :conflict)
+        end
+
         def open
           round = Round.find(params[:id])
           return unless require_role!(round.election, 'creator')
