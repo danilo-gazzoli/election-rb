@@ -13,6 +13,7 @@ module Voting
         device.school_installation_id == round.election.school_installation_id
       created = false
       session = round.with_lock do
+        raise NotAllowed, 'election is cancelled' if round.election.reload.canceled?
         raise NotAllowed, 'round is not open' unless round.state == 'open' &&
                                                     now >= round.opens_at && now < round.closes_at
 

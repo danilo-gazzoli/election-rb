@@ -356,6 +356,144 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/rounds/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: suspendRound
+      summary: Suspend voting while preserving confirmed votes and session progress
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        New releases and confirmations are blocked. Previously committed confirmations
+        remain recoverable. State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Suspended round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_suspend_denied; the round is not open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/admin/rounds/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: resumeRound
+      summary: Resume the same ballot within the original voting schedule
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        Only a suspended round can resume, from opens_at inclusive until grace_until
+        exclusive. The original schedule is not extended. After closes_at, only
+        sessions already started can continue; new releases and starts remain blocked.
+        State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Resumed round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_resume_denied; incompatible state or original grace period ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/admin/rounds/{id}/annul:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: annulRound
+      summary: Annul a round with explicit confirmation and a reason
+      description: >-
+        Requires an active creator of this election, a nonblank textual reason
+        and confirmed equal to the JSON boolean true. Any nonannulled round can
+        be annulled. Cancels active sessions and locks their devices without
+        generating votes. Preserves votes, receipts, frozen configuration and
+        historical tallies for audit. Marks the election cancelled. An annulled
+        round cannot declare a winner or be reopened. Audit and operational
+        state are persisted atomically. Repeating annulment returns a conflict.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundAnnulmentRequest'
+      responses:
+        '200':
+          description: Annulled round; no winner is declared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_annul_denied; round is already annulled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason or confirmation_required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v1/admin/rounds/{id}/close:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
@@ -392,6 +530,60 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/pollworker/sessions/{id}/abandon:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: abandonVotingSession
+      summary: Resolve a formally abandoned session without changing confirmed votes
+      description: >-
+        Requires an active pollworker or creator role in the election and school,
+        and a nonblank textual reason. Confirmed votes and receipts are preserved.
+        Started sessions receive administrative nulls only for remaining stages.
+        Unstarted releases are cancelled without votes. The operator, reason,
+        time and remaining stage identifiers are recorded atomically without choices.
+        Repeating a closure does not duplicate votes or evidence. A connection failure
+        does not call this command automatically. New abandonment is forbidden in
+        a cancelled election.
+      x-implementation-status: implemented
+      x-authentication: operator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Original or newly committed session closure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionClosureResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: abandon_denied; completed session or cancelled election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; absent, blank or nontextual reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v1/voting-device/state:
     get:
       operationId: getVotingDeviceState
@@ -412,6 +604,11 @@ paths:
     post:
       operationId: confirmVote
       summary: Confirm exactly one voting stage
+      description: >-
+        New confirmations are forbidden while suspended, closed, annulled or
+        when the election is cancelled. A paired device may recover an exact
+        previously committed command from its latest completed session or a
+        session cancelled by annulment without creating another vote.
       x-implementation-status: implemented
       x-authentication: voting-device-credential-with-csrf
       requestBody:
@@ -731,6 +928,45 @@ components:
               choice_index:
                 type: integer
                 minimum: 1
+    RoundAnnulmentRequest:
+      type: object
+      required: [reason, confirmed]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Nonblank reason recorded in the operational audit.
+        confirmed:
+          type: boolean
+          enum: [true]
+          description: Explicit confirmation; strings and numeric values are rejected.
+    SessionClosureResult:
+      type: object
+      required: [session_id, state]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [abandoned, cancelled]
+    RoundTransitionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Operational justification; never include a voter identity or choice.
+    RoundTransitionResult:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [open, suspended, annulled]
     VotingDeviceSession:
       type: object
       required: [session_id, state]
@@ -742,10 +978,15 @@ components:
           type: string
     VotingDeviceState:
       type: object
-      required: [state]
+      required: [state, round_state]
       properties:
         state:
           type: string
+        round_state:
+          type: string
+          nullable: true
+          enum: [draft, scheduled, open, suspended, closed, annulled, null]
+          description: Latest session round state; null until the device has a session.
         session_id:
           type: string
           nullable: true
@@ -753,6 +994,7 @@ components:
           type: integer
           nullable: true
         stage:
+          description: Next stage only for an active session in an open round of a noncancelled election; null while suspended, cancelled or inactive.
           type: object
           nullable: true
         last_receipt_id:

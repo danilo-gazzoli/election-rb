@@ -32,12 +32,17 @@ module Api
                                 status: :unauthorized) unless device
 
         active = device.voting_sessions.find_by(state: %w[released in_progress])
-        stage = active && VotingStage.find_by(round_id: active.round_id,
-                                              global_position: active.current_stage_position)
         latest = active || device.voting_sessions.order(released_at: :desc).first
-        receipt_session = latest if latest && %w[released in_progress completed].include?(latest.state)
+        round_state = latest&.round&.state
+        stage = if active && round_state == 'open' && !active.round.election.canceled?
+                  VotingStage.find_by(round_id: active.round_id, global_position: active.current_stage_position)
+                end
+        receipt_session = latest if latest && (
+          %w[released in_progress completed].include?(latest.state) ||
+          (latest.state == 'cancelled' && round_state == 'annulled')
+        )
         last_receipt = receipt_session&.confirmation_receipts&.order(confirmed_at: :desc)&.first
-        render json: { state: device.state, session_id: active&.id,
+        render json: { state: device.state, round_state: round_state, session_id: active&.id,
                        next_stage_position: active&.current_stage_position,
                        stage: stage && stage_catalog(stage), last_receipt_id: last_receipt&.id }
       end
@@ -49,8 +54,10 @@ module Api
 
         active = device.voting_sessions.find_by(state: %w[released in_progress])
         if active.nil?
-          latest = device.voting_sessions.where(state: 'completed').order(released_at: :desc).first
-          active = latest if latest&.confirmation_receipts&.exists?(
+          latest = device.voting_sessions.order(released_at: :desc).first
+          recoverable = latest && (latest.state == 'completed' ||
+            (latest.state == 'cancelled' && latest.round.state == 'annulled'))
+          active = latest if recoverable && latest.confirmation_receipts.exists?(
             voting_stage_id: params[:stage_id], command_key: params[:command_key]
           )
         end

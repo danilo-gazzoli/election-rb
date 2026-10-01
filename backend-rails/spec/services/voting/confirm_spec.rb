@@ -53,11 +53,17 @@ RSpec.describe Voting::Confirm do
   end
   let(:session) { VotingSession.create!(round: round, voting_device: device, released_at: Time.current) }
 
+  let(:pollworker) do
+    User.create!(school_installation: installation, name: 'Pollworker', login: 'pollworker',
+                 password: 'long-random-password')
+  end
+
   before do
     first_stage
     second_stage
     first_round_candidacy
     second_round_candidacy
+    ElectionRole.create!(election: election, user: pollworker, role: 'pollworker')
     round.update!(state: 'open')
   end
 
@@ -133,7 +139,7 @@ RSpec.describe Voting::Confirm do
     confirm(first_stage, first_candidate, 'cmd-1')
     allow(ActionCable.server).to receive(:broadcast).and_raise(IOError, 'transport unavailable')
 
-    expect { Voting::Abandon.call(session: session, reason: 'voter left') }.not_to raise_error
+    expect { Voting::Abandon.call(session: session, actor: pollworker, reason: 'voter left') }.not_to raise_error
     expect(session.reload.state).to eq('abandoned')
     expect(session.first_choice_fingerprint).to be_nil
     expect(device.reload.state).to eq('locked')
@@ -192,8 +198,8 @@ RSpec.describe Voting::Confirm do
 
   it 'keeps the first vote and adds one administrative null on abandonment' do
     confirm(first_stage, first_candidate, 'cmd-1')
-    Voting::Abandon.call(session: session, reason: 'Person left before finishing')
-    Voting::Abandon.call(session: session, reason: 'Repeated request')
+    Voting::Abandon.call(session: session, actor: pollworker, reason: 'Person left before finishing')
+    Voting::Abandon.call(session: session, actor: pollworker, reason: 'Repeated request')
 
     expect(CastVote.where(origin: 'confirmation').count).to eq(1)
     expect(CastVote.where(origin: 'abandonment', kind: 'null').count).to eq(1)
@@ -208,12 +214,12 @@ RSpec.describe Voting::Confirm do
     expect(ActionCable.server).to receive(:broadcast)
       .with("voting_device:#{device.id}", { event: 'state_changed' }).once
 
-    Voting::Abandon.call(session: session, reason: 'Person left before finishing')
+    Voting::Abandon.call(session: session, actor: pollworker, reason: 'Person left before finishing')
   end
 
   it 'cancels a released but unstarted session without counting any votes' do
     session
-    Voting::Abandon.call(session: session, reason: 'Release cancelled')
+    Voting::Abandon.call(session: session, actor: pollworker, reason: 'Release cancelled')
     expect(session.reload.state).to eq('cancelled')
     expect(CastVote.count).to eq(0)
   end

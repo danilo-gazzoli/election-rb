@@ -13,15 +13,26 @@ module Voting
                              role: 'creator', active: true)
 
       round.with_lock do
+        raise NotAllowed, 'election is cancelled' if round.election.reload.canceled?
         raise NotAllowed, 'round is not open' unless %w[open suspended].include?(round.state)
         raise NotAllowed, 'grace period has not ended' if now < round.grace_until
         raise NotAllowed, 'active voting sessions remain' if
           VotingSession.exists?(round_id: round.id, state: %w[released in_progress])
 
         round.update!(state: 'closed')
+        reconciliation = ReconcileRound.call(round: round)
+        unless reconciliation.fetch(:status) == 'reconciled'
+          reason = "reconciliation differs by stage: #{JSON.generate(reconciliation.fetch(:issues))}"
+          Incident.create!(round: round, user: actor, kind: 'reconciliation_mismatch',
+                           reason: reason, occurred_at: now)
+          AuditEvent.create!(election: round.election, user: actor, action: 'round_reconcile',
+                             result: 'pending', reason: reason, occurred_at: now)
+        end
         round.round_contests.includes(:contest).each do |round_contest|
           contest = round_contest.contest
-          result = if contest.method == 'simple_majority'
+          result = if reconciliation.fetch(:status) != 'reconciled'
+                     { status: 'pending', reason: 'reconciliation differs by stage' }
+                   elsif contest.method == 'simple_majority'
                      SimpleMajorityTally.call(round_contest: round_contest)
                    else
                      { status: 'pending', reason: 'tally method is not implemented' }
@@ -32,7 +43,7 @@ module Voting
           TallyRun.create!(round_contest: round_contest, algorithm_version: contest.rule_version,
                            input_digest: Digest::SHA256.hexdigest(JSON.generate(input)),
                            state: result.fetch(:status), totals: result,
-                           calculation: { vote_groups: input }, created_at: now)
+                           calculation: { vote_groups: input, reconciliation: reconciliation }, created_at: now)
         end
         AuditEvent.create!(election: round.election, user: actor, action: 'round_close',
                            result: 'success', occurred_at: now)

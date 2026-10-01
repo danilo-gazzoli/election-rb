@@ -3,17 +3,16 @@
 module Voting
   class SimpleMajorityTally
     def self.call(round_contest:)
-      round = round_contest.round
+      round = round_contest.round.reload
       contest = round_contest.contest
       raise ArgumentError, 'wrong tally method' unless contest.method == 'simple_majority'
+      return { status: 'annulled', reason: 'election is cancelled' } if round.election.reload.canceled?
+      return { status: 'annulled', reason: 'round is annulled' } if round.state == 'annulled'
       raise ArgumentError, 'round is not closed' unless round.state == 'closed'
 
       votes = CastVote.where(round_id: round.id, contest_id: contest.id)
-      stages = VotingStage.where(round_contest_id: round_contest.id)
-      receipts_by_stage = ConfirmationReceipt.where(voting_stage_id: stages.select(:id))
-                                             .group(:voting_stage_id).count
-      votes_by_stage = votes.where(origin: 'confirmation').group(:voting_stage_id).count
-      return pending('confirmation and vote totals differ by stage') if receipts_by_stage != votes_by_stage
+      reconciliation = ReconcileRound.call(round: round)
+      return pending('reconciliation differs by stage') unless reconciliation.fetch(:status) == 'reconciled'
 
       counts = votes.where(kind: 'nominal').group(:candidacy_id).count
       return pending('no valid nominal votes') if counts.empty?
