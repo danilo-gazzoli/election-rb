@@ -1158,3 +1158,27 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
 - Consolidar prévia da eleição, isolamento de sessões do cliente, gateway e
   roteiros operacionais com os demais incrementos já presentes no PR.
   Esta etapa publica a entrega para revisão; não executa merge.
+
+### 01/10/2026 — falha de carregamento reproduzida e correção mínima
+
+- Danilo reproduziu com CI=true o NameError de DeleteRestrictionError:
+  zero exemplos e um erro de carregamento, antes dos testes de partidos.
+- A implementação travada de ActiveSupport::Rescuable aceita nome de exceção
+  como string e resolve o handler quando trata a exceção. Alterada somente
+  essa referência no PartiesController para evitar resolução antes de
+  Active Record carregar suas associações durante eager loading.
+- Mantido o mesmo handler party_in_use/HTTP 409. O teste existente de
+  exclusão de partido com candidatura verifica preservação dos registros
+  e ausência de auditoria de exclusão.
+- Nenhum teste, migration ou servidor executado nesta etapa. Aguardar Danilo
+  executar a regressão completa com CI=true, incluindo os testes do gateway,
+  antes de commitar/enviar a correção ao PR #31.
+
+### 01/10/2026 — regressão com CI=true confirmada
+
+- Danilo confirmou 354 exemplos, zero falhas e 32 pendências legadas após
+  a correção do handler. A suíte combinada inclui os oito testes do gateway
+  e carrega a aplicação com CI=true. Cobertura informada: 99,2%.
+- Commitar a correção de uma linha e este registro na mesma feature branch,
+  enviar ao PR #31 e conferir a CI remota. Nenhum teste ou migration pelo
+  agente; nenhum merge automático.

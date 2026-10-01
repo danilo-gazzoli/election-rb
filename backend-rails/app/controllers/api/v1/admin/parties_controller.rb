@@ -20,7 +20,7 @@ module Api
           render_api_error(code: 'invalid_configuration', message: 'Invalid party configuration',
                            status: :unprocessable_entity)
         end
-        rescue_from ActiveRecord::InvalidForeignKey, ActiveRecord::DeleteRestrictionError do
+        rescue_from ActiveRecord::InvalidForeignKey, 'ActiveRecord::DeleteRestrictionError' do
           render_api_error(code: 'party_in_use', message: 'Party is referenced by election data', status: :conflict)
         end
         rescue_from ActionController::ParameterMissing do
