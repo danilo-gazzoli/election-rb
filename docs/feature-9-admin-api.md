@@ -40,3 +40,35 @@ criação foi ampliado para consultar a abertura do turno pela API e verificar
 as duas etapas e o catálogo congelado. Danilo confirmou essa sequência e
 a regressão completa: **279 exemplos, 0 falhas e 32 pendências legadas**.
 Essa evidência é da API; o aceite em navegador permanece pendente.
+
+## Configuração de partidos — contrato implementado e validado
+
+Base: ERS RF-07, RF-10 e RF-39; SDD 3.3 e 7. API subordinada à eleição:
+GET/POST /api/v1/admin/elections/{election_id}/parties e
+PATCH/DELETE /api/v1/admin/elections/{election_id}/parties/{id}.
+Sessão autenticada, CSRF e papel de criador obrigatório para essas operações.
+
+Corpo party: name, abbreviation, ballot_number (texto de dois dígitos, 01–99)
+e description opcional. IDs e campos internos não são aceitos do cliente.
+Sigla e número são únicos na eleição; eleições independentes podem reutilizar
+os mesmos dados sem compartilhar um registro mutável. A criação registra o
+partido e sua participação de forma atômica; edição sincroniza o número usado
+no catálogo de votação; exclusão só é permitida sem referências de candidaturas
+ou federações. Cada mutação bem-sucedida produz auditoria na mesma transação.
+
+Qualquer turno aberto, suspenso, encerrado ou anulado bloqueia mutações.
+O acesso ao catálogo existente continua disponível. As rotas legadas não podem
+alterar partidos pertencentes ao novo domínio. Registros legados permanecem
+separados; conversão automática de partidos compartilhados não faz parte deste
+ciclo, conforme SDD 11. O catálogo de votação continua consumindo a participação
+existente até a migração completa do legado.
+
+Respostas: 200 consulta/edição; 201 criação; 204 exclusão; 401 sem sessão;
+403 sem autorização; 404 recurso fora da eleição; 409 catálogo congelado ou
+partido em uso; 422 dados inválidos. Danilo confirmou o verde focal da API
+(64 exemplos, 0 falhas, incluindo testes legados), depois o vermelho de
+integridade/OpenAPI (8 exemplos, 6 falhas). As proteções no PostgreSQL e o
+contrato OpenAPI foram implementados após esse vermelho. Danilo aplicou a
+segunda migration e confirmou o verde na suíte completa: **306 exemplos,
+0 falhas e 32 pendências legadas**. Esta evidência valida o backend; não
+substitui o aceite integrado da interface ou a migração dos dados antigos.

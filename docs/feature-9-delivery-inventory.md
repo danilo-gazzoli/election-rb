@@ -70,3 +70,21 @@ As **16 migrações novas** `20260927010000` a `20260927160000` estão no checko
 5. Rodar testes focais, suíte completa, migrações em banco novo, análise de estilo e revisão de sigilo. Só então tornar o PR apto à revisão e mesclar em `develop`.
 
 **Limite da evidência:** os modelos e 16 migrações foram criados localmente; muitos ainda não estão commitados. O histórico registrou que os primeiros models persistidos foram criados em lote sem fase vermelha individual por invariante. A suíte verde prova os casos atuais, mas não corrige retroativamente essa falha do processo TDD. Este inventário não afirma prontidão para produção ou piloto.
+
+## Atualização verificada em 30/09/2026 — configuração administrativa
+
+Esta atualização substitui as pendências de API/abertura e a contagem de
+regressão do levantamento anterior quando se referirem a rotas já entregues.
+A API de criador cria disputas/candidaturas e abre/fecha o turno; testes de
+requisição verificam a configuração seguida de snapshot com duas etapas.
+
+Configuração de partidos implementada: GET/POST/PATCH/DELETE por eleição,
+autorização, auditoria transacional, número textual, unicidade por eleição e
+proteção do catálogo no PostgreSQL. Foram adicionadas duas migrations ao Party
+existente e 27 exemplos (19 API, seis integridade, dois contrato). Danilo confirmou
+**306 exemplos, 0 falhas, 32 pendências legadas** na suíte completa.
+
+Continuam pendentes: configuração de eleição/agenda e prévia pela API,
+requisitos e aceite integrado do frontend, validação de implantação e conversão
+dos registros legados compartilhados. O incremento de partidos não implementa
+federações nem encerra a issue #25.

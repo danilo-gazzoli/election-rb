@@ -151,3 +151,30 @@ verdes confirmados e estão incluídas na suíte 247/0/32.
 As alterações locais de modo executável em quatro arquivos de
 `backend-rails/bin` já estavam presentes quando este trabalho começou e
 não fazem parte desta implementação.
+
+## Incremento de configuração de partidos (30/09/2026)
+
+| Arquivo | Motivo da alteração |
+| --- | --- |
+| `app/models/party.rb` | Propriedade da eleição, número textual e validação de unicidade por eleição; compatibilidade com parties legados sem proprietário. |
+| `app/services/configuration/manage_party.rb` | Cadastro/edição/exclusão e participação/auditoria na mesma transação, autorização e congelamento do catálogo. |
+| `app/controllers/api/v1/admin/parties_controller.rb` | API JSON autenticada, campos permitidos e respostas estáveis para cada operação. |
+| `app/controllers/parties_controller.rb` | Impedir que as rotas legadas alterem partidos pertencentes ao novo domínio. |
+| `config/routes.rb` | Quatro operações de configuração subordinadas à eleição. |
+| `db/migrate/20260930100000_scope_parties_to_elections.rb` | Eleição proprietária e número canônico com FK, índices únicos e CHECK; sem migrar dados compartilhados automaticamente. |
+| `spec/requests/api_v1_party_configuration_spec.rb` | 19 exemplos escritos antes da implementação, vermelho confirmado por Danilo. |
+
+Verificação verde e regressão ainda não executadas. Não foram criados novos
+models persistidos, nem alterados os votos ou o cálculo de resultados.
+
+Fechamento de integridade/documentação: `ElectionPartyRegistration` valida a
+propriedade do partido; `20260930110000_protect_election_owned_parties.rb`
+protege o catálogo e essa relação no PostgreSQL. O OpenAPI descreve as quatro
+operações. Seis testes de integridade e dois de contrato foram escritos antes
+das correções, com vermelho confirmado (8 exemplos, 6 falhas). O verde completo
+é o próximo gate, executado por Danilo.
+
+Validação final do incremento de partidos: Danilo aplicou as duas migrations
+no banco de teste e confirmou **306 exemplos, 0 falhas, 32 pendências legadas**
+na suíte completa. Os 27 novos exemplos cobrem API, integridade e contrato.
+Não foram adicionadas entidades persistidas, nem alterado o frontend.

@@ -714,3 +714,79 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   operações de configuração (partidos, eleição e agenda do turno) pela API,
   a prévia e o aceite integrado da interface conforme seus requisitos.
   Nenhum model persistido ou migration foi acrescentado nesta operação.
+
+## Partidos — início do TDD em 30/09/2026
+
+- Escrito `spec/requests/api_v1_party_configuration_spec.rb` com 19 exemplos:
+  autorização, cadastro/participação/auditoria atômicos, isolamento e unicidade
+  por eleição, número textual canônico, consulta, edição, rollback, exclusão,
+  integridade das filiações, proteção contra escrita pelas rotas legadas e
+  bloqueio em quatro estados de turno.
+- Decisão de compatibilidade: partidos do novo domínio pertencem à eleição;
+  registros legados não são migrados ou compartilhados silenciosamente.
+- Próximo passo: Danilo executa o vermelho. Nenhum código de produção ou
+  migration foi alterado nesta etapa. Em seguida implementar o mínimo,
+  aplicar migration com comando fornecido a Danilo e verificar o verde.
+
+### Partidos — vermelho confirmado e implementação mínima
+
+- Danilo enviou **19 exemplos, 19 falhas**: todas as operações devolviam 404.
+- Implementados `Configuration::ManageParty`, `Admin::PartiesController` e
+  GET/POST/PATCH/DELETE subordinados à eleição. Autorização exige criador
+  ativo da mesma instalação. Eleição e turnos são bloqueados durante mutação,
+  respeitando o congelamento e a abertura concorrente do catálogo existente.
+- Migration `20260930100000_scope_parties_to_elections` acrescenta proprietário
+  e número textual ao Party. Índices únicos protegem sigla/número por eleição;
+  CHECK mantém número canônico e a representação inteira legada consistentes.
+  Registros anteriores ficam com eleição NULL; nenhuma conversão automática.
+- Party mantém as validações legadas, agora por escopo. A API sincroniza a
+  participação existente para o catálogo de votação. Exclusão referenciada
+  usa as FKs existentes e reverte inclusive participação/auditoria.
+- PartiesController legado só consulta/muta partidos sem proprietário,
+  impedindo que esse caminho contorne a autorização da API nova.
+- Não houve alteração em votos, cálculo ou frontend. Migração e verde focal
+  aguardam execução por Danilo. O contrato OpenAPI das rotas novas e as
+  verificações restantes de integridade ainda precisam do próximo ciclo TDD.
+
+### Partidos — verde focal e fechamento de integridade
+
+- Danilo aplicou a migration no banco de teste e confirmou **64 exemplos,
+  0 falhas**, incluindo os 19 novos e os testes legados de Party e suas rotas.
+  `structure.sql` foi atualizado pela migration executada por Danilo.
+- Escritos seis exemplos de integridade: congelamento do Party no PostgreSQL,
+  isolamento da participação por eleição, índice único e número canônico
+  mesmo sem validação de modelo. Dois testes de contrato exigem a documentação
+  OpenAPI das quatro operações e a distinção entre cadastro e edição parcial.
+- Próximo passo: Danilo executa esse conjunto; somente após confirmar o
+  vermelho, acrescentar as proteções/documentação faltantes e verificar verde.
+  Nenhuma nova correção de produção foi aplicada nesta etapa.
+
+### Partidos — integridade/documentação após o vermelho
+
+- Danilo confirmou **8 exemplos, 6 falhas**: congelamento direto do Party,
+  inserção tardia, filiação de partido proprietário em outra eleição no model
+  e PostgreSQL, além das duas lacunas do contrato OpenAPI. Os índices e o
+  CHECK de número canônico da migration anterior já passaram.
+- Acrescentados a validação em ElectionPartyRegistration e a migration
+  `20260930110000_protect_election_owned_parties`: proteção de inserção/edição/
+  exclusão após abertura sob lock dos turnos e ownership na participação.
+  A propriedade de um partido já pertencente a uma eleição não é transferível.
+  Registros legados sem proprietário conservam compatibilidade.
+- OpenAPI documenta GET/POST/PATCH/DELETE de partidos, autenticação do criador,
+  números canônicos, criação obrigatória versus edição parcial e erros JSON.
+- Próximo passo: Danilo aplica a segunda migration no banco de teste e executa
+  a suíte completa; o mesmo comando confirma o verde e a regressão. Sem commit
+  ou atualização do PR até esse resultado. Nenhum teste foi executado pelo agente.
+
+### Partidos — regressão completa confirmada
+
+- Danilo aplicou `20260930110000_protect_election_owned_parties` e confirmou
+  **306 exemplos, 0 falhas, 32 pendências legadas** em toda a suíte Rails.
+  O conjunto inclui os 19 novos testes de API, seis de integridade e dois de
+  contrato; TDD registrado com vermelho antes das respectivas implementações.
+- Configuração de partidos pela API concluída neste incremento, preservando
+  testes legados. `structure.sql` contém as duas novas migrations e triggers.
+- Não foram executados testes pelo agente. Restam configuração da eleição e
+  agenda, prévia e requisitos/aceite integrado da interface; federações e
+  migração automática dos partidos legados não foram entregues por este ciclo.
+- Próxima ação: commit na branch atual e atualização do PR #31 para develop.

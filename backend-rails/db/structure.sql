@@ -1,4 +1,4 @@
-\restrict 8dGk8Q6gl5cqy9WEnk89QcpyOLXFcGeoZr0jAmtPP7N1Wn3m0dunZ4fSZJARi1t
+\restrict fEKuf6FmzjzfjgesPyFPvhtkMNv6j11FRK6ll0uVFepu9Q2QRB2eRi9g9l4wvJo
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -220,6 +220,40 @@ $$;
 
 
 --
+-- Name: protect_owned_party_catalog(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_owned_party_catalog() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  owner_ids bigint[];
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    owner_ids := ARRAY[NEW.election_id];
+  ELSIF TG_OP = 'DELETE' THEN
+    owner_ids := ARRAY[OLD.election_id];
+  ELSE
+    owner_ids := ARRAY[OLD.election_id, NEW.election_id];
+    IF OLD.election_id IS NOT NULL AND OLD.election_id IS DISTINCT FROM NEW.election_id THEN
+      RAISE EXCEPTION 'owned party must remain in its election';
+    END IF;
+  END IF;
+
+  PERFORM 1 FROM rounds WHERE election_id = ANY(owner_ids) ORDER BY id FOR SHARE;
+  IF EXISTS (
+    SELECT 1 FROM rounds WHERE election_id = ANY(owner_ids)
+    AND state IN ('open', 'suspended', 'closed', 'annulled')
+  ) THEN
+    RAISE EXCEPTION 'election-owned party catalog is immutable';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: validate_confirmation_receipt_round(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -233,6 +267,25 @@ BEGIN
     WHERE s.id = NEW.voting_session_id AND st.id = NEW.voting_stage_id
   ) THEN
     RAISE EXCEPTION 'receipt stage must belong to the session round';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_owned_party_registration(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_owned_party_registration() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  owner_id bigint;
+BEGIN
+  SELECT election_id INTO owner_id FROM parties WHERE id = NEW.party_id FOR SHARE;
+  IF owner_id IS NOT NULL AND owner_id IS DISTINCT FROM NEW.election_id THEN
+    RAISE EXCEPTION 'party must belong to the registration election';
   END IF;
   RETURN NEW;
 END;
@@ -596,8 +649,8 @@ CREATE TABLE public.cast_votes (
     origin character varying NOT NULL,
     candidacy_id bigint,
     party_id bigint,
-    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY ((ARRAY['blank'::character varying, 'null'::character varying])::text[])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
-    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY ((ARRAY['confirmation'::character varying, 'abandonment'::character varying])::text[])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
+    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY (ARRAY[('blank'::character varying)::text, ('null'::character varying)::text])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
+    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY (ARRAY[('confirmation'::character varying)::text, ('abandonment'::character varying)::text])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
 );
 
 
@@ -731,7 +784,7 @@ CREATE TABLE public.election_roles (
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY ((ARRAY['creator'::character varying, 'pollworker'::character varying])::text[])))
+    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY (ARRAY[('creator'::character varying)::text, ('pollworker'::character varying)::text])))
 );
 
 
@@ -891,7 +944,10 @@ CREATE TABLE public.parties (
     party_number integer,
     description text,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    election_id bigint,
+    ballot_number character varying,
+    CONSTRAINT owned_party_canonical_number CHECK (((election_id IS NULL) OR ((ballot_number IS NOT NULL) AND (party_number IS NOT NULL) AND ((ballot_number)::text ~ '^(0[1-9]|[1-9][0-9])$'::text) AND (party_number = (ballot_number)::integer))))
 );
 
 
@@ -1719,7 +1775,7 @@ ALTER TABLE ONLY public.voting_stages
 -- Name: idx_active_session_per_device; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY ((ARRAY['released'::character varying, 'in_progress'::character varying])::text[]));
+CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY (ARRAY[('released'::character varying)::text, ('in_progress'::character varying)::text]));
 
 
 --
@@ -1755,6 +1811,20 @@ CREATE UNIQUE INDEX idx_on_school_installation_id_public_label_d894cc042e ON pub
 --
 
 CREATE UNIQUE INDEX idx_one_receipt_per_stage ON public.confirmation_receipts USING btree (voting_session_id, voting_stage_id);
+
+
+--
+-- Name: idx_owned_party_abbreviation; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_owned_party_abbreviation ON public.parties USING btree (election_id, abbreviation) WHERE (election_id IS NOT NULL);
+
+
+--
+-- Name: idx_owned_party_number; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_owned_party_number ON public.parties USING btree (election_id, ballot_number) WHERE (election_id IS NOT NULL);
 
 
 --
@@ -2031,6 +2101,13 @@ CREATE INDEX index_incidents_on_voting_session_id ON public.incidents USING btre
 
 
 --
+-- Name: index_parties_on_election_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_parties_on_election_id ON public.parties USING btree (election_id);
+
+
+--
 -- Name: index_pollworkers_on_election_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2259,6 +2336,20 @@ CREATE TRIGGER confirmation_receipt_round_valid BEFORE INSERT OR UPDATE ON publi
 --
 
 CREATE TRIGGER contest_catalog_immutable BEFORE DELETE OR UPDATE ON public.contests FOR EACH ROW EXECUTE FUNCTION public.deny_open_round_catalog_mutation();
+
+
+--
+-- Name: parties owned_party_catalog_protected; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER owned_party_catalog_protected BEFORE INSERT OR DELETE OR UPDATE ON public.parties FOR EACH ROW EXECUTE FUNCTION public.protect_owned_party_catalog();
+
+
+--
+-- Name: election_party_registrations owned_party_registration_valid; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER owned_party_registration_valid BEFORE INSERT OR UPDATE ON public.election_party_registrations FOR EACH ROW EXECUTE FUNCTION public.validate_owned_party_registration();
 
 
 --
@@ -2729,14 +2820,24 @@ ALTER TABLE ONLY public.election_party_registrations
 
 
 --
+-- Name: parties fk_rails_f8e08ed946; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.parties
+    ADD CONSTRAINT fk_rails_f8e08ed946 FOREIGN KEY (election_id) REFERENCES public.elections(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 8dGk8Q6gl5cqy9WEnk89QcpyOLXFcGeoZr0jAmtPP7N1Wn3m0dunZ4fSZJARi1t
+\unrestrict fEKuf6FmzjzfjgesPyFPvhtkMNv6j11FRK6ll0uVFepu9Q2QRB2eRi9g9l4wvJo
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260930110000'),
+('20260930100000'),
 ('20260927160000'),
 ('20260927150000'),
 ('20260927140000'),

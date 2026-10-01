@@ -73,6 +73,113 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/elections/{election_id}/parties:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listElectionParties
+      summary: List parties participating in the creator's election
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Election party catalog with canonical ballot numbers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parties]
+                properties:
+                  parties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Party'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElectionParty
+      summary: Create a party and its election registration atomically
+      description: >-
+        Requires a creator role in this election. Creates an election-owned
+        record and an audit event. Abbreviation and number are unique within
+        this election. Rejects changes after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyCreateRequest'
+      responses:
+        '201':
+          description: Party and registration persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/parties/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateElectionParty
+      summary: Edit an owned draft party and synchronize its registration
+      description: >-
+        Accepts partial party attributes. Requires ownership by this election
+        and a creator role. Party, registration and audit event are updated
+        atomically. Rejects changes after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyUpdateRequest'
+      responses:
+        '200':
+          description: Updated party
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+        default:
+          $ref: '#/components/responses/ApiError'
+    delete:
+      operationId: deleteElectionParty
+      summary: Delete an unused owned draft party and its registration
+      description: >-
+        Requires a creator role. Returns 409 when the catalog is frozen or
+        election data reference the party. An audit event survives successful
+        deletion; a failure rolls back the complete command.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '204':
+          description: Party and registration deleted with an audit event
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/admin/elections/{election_id}/contests:
     parameters:
       - name: election_id
@@ -342,6 +449,50 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    PartyAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 10
+          maxLength: 50
+        abbreviation:
+          type: string
+          minLength: 2
+          maxLength: 8
+          pattern: '^[A-Z]+$'
+        ballot_number:
+          type: string
+          pattern: '^(0[1-9]|[1-9][0-9])$'
+          description: Canonical two-digit number from 01 through 99.
+        description:
+          type: string
+          nullable: true
+          minLength: 15
+          maxLength: 500
+    Party:
+      allOf:
+        - $ref: '#/components/schemas/PartyAttributes'
+        - type: object
+          required: [id, name, abbreviation, ballot_number]
+          properties:
+            id:
+              type: integer
+    PartyCreateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          type: object
+          required: [name, abbreviation, ballot_number]
+          allOf:
+            - $ref: '#/components/schemas/PartyAttributes'
+    PartyUpdateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          $ref: '#/components/schemas/PartyAttributes'
     Error:
       type: object
       required: [error]

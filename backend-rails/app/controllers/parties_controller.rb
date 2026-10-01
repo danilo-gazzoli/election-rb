@@ -2,11 +2,11 @@
 
 class PartiesController < ApplicationController
   def index
-    @parties = Party.all
+    @parties = Party.where(election_id: nil)
   end
 
   def show
-    @party = Party.find_by(id: params[:id])
+    @party = Party.find_by(id: params[:id], election_id: nil)
     return if @party
 
     head :not_found
@@ -24,14 +24,14 @@ class PartiesController < ApplicationController
   end
 
   def edit
-    @party = Party.find_by(id: params[:id])
+    @party = Party.find_by(id: params[:id], election_id: nil)
     return if @party
 
     head :not_found
   end
 
   def update
-    @party = Party.find_by(id: params[:id])
+    @party = Party.find_by(id: params[:id], election_id: nil)
 
     return head :not_found unless @party
 
@@ -41,7 +41,7 @@ class PartiesController < ApplicationController
   end
 
   def destroy
-    @party = Party.find_by(id: params[:id])
+    @party = Party.find_by(id: params[:id], election_id: nil)
     return head :not_found unless @party
 
     @party.destroy
