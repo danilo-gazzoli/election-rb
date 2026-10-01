@@ -10,7 +10,7 @@ module Voting
         actor.school_installation_id == election.school_installation_id &&
         ElectionRole.exists?(election_id: election.id, user_id: actor.id,
                              role: %w[pollworker creator], active: true)
-      raise ArgumentError, 'reason is required' if reason.blank?
+      raise ArgumentError, 'reason is required' unless reason.is_a?(String) && reason.present?
 
       changed = false
       # Use the same lock order as confirmation and lifecycle commands.

@@ -530,6 +530,60 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/pollworker/sessions/{id}/abandon:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: abandonVotingSession
+      summary: Resolve a formally abandoned session without changing confirmed votes
+      description: >-
+        Requires an active pollworker or creator role in the election and school,
+        and a nonblank textual reason. Confirmed votes and receipts are preserved.
+        Started sessions receive administrative nulls only for remaining stages.
+        Unstarted releases are cancelled without votes. The operator, reason,
+        time and remaining stage identifiers are recorded atomically without choices.
+        Repeating a closure does not duplicate votes or evidence. A connection failure
+        does not call this command automatically. New abandonment is forbidden in
+        a cancelled election.
+      x-implementation-status: implemented
+      x-authentication: operator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Original or newly committed session closure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionClosureResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: abandon_denied; completed session or cancelled election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; absent, blank or nontextual reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v1/voting-device/state:
     get:
       operationId: getVotingDeviceState
@@ -550,6 +604,11 @@ paths:
     post:
       operationId: confirmVote
       summary: Confirm exactly one voting stage
+      description: >-
+        New confirmations are forbidden while suspended, closed, annulled or
+        when the election is cancelled. A paired device may recover an exact
+        previously committed command from its latest completed session or a
+        session cancelled by annulment without creating another vote.
       x-implementation-status: implemented
       x-authentication: voting-device-credential-with-csrf
       requestBody:
@@ -882,6 +941,16 @@ components:
           type: boolean
           enum: [true]
           description: Explicit confirmation; strings and numeric values are rejected.
+    SessionClosureResult:
+      type: object
+      required: [session_id, state]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [abandoned, cancelled]
     RoundTransitionRequest:
       type: object
       required: [reason]
@@ -925,7 +994,7 @@ components:
           type: integer
           nullable: true
         stage:
-          description: Next stage only for an active session in an open round; null while suspended or inactive.
+          description: Next stage only for an active session in an open round of a noncancelled election; null while suspended, cancelled or inactive.
           type: object
           nullable: true
         last_receipt_id:
