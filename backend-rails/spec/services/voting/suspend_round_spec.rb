@@ -4,55 +4,17 @@ require 'rails_helper'
 
 # ERS RF-26, RF-39, RF-40: preserve progress and secret choices during suspension.
 RSpec.describe 'Voting::SuspendRound' do
-  let(:now) { Time.current.change(usec: 0) }
-  let(:school) { SchoolInstallation.create!(identifier: 'pause-school', name: 'Pause School') }
-  let(:creator) { user('creator') }
-  let(:pollworker) { user('pollworker') }
-  let(:election) do
-    Election.create!(school_installation: school, creator: creator, title: 'School Election',
-                     description: 'A school election for lifecycle tests', start_time: 1.day.from_now,
-                     end_time: 2.days.from_now, election_day: 1.day.from_now.to_date)
-  end
-  let(:round) do
-    Round.create!(election: election, number: 1, state: 'draft', opens_at: now - 1.minute,
-                  closes_at: now + 1.hour, grace_until: now + 70.minutes)
-  end
-  let(:contest) do
-    Contest.create!(election: election, name: 'Senate', position: 1, method: 'simple_majority',
-                    seats: 2, choices_per_person: 2, has_vice: false)
-  end
-  let(:device) do
-    VotingDevice.create!(school_installation: school, public_label: 'Computer',
-                         credential_digest: 'test-digest', state: 'locked')
-  end
-  let(:session) { Voting::Release.call(round: round, device: device, actor: pollworker, now: now) }
-  let(:reason) { 'Power supply inspection' }
+  include_context 'an opened school voting round'
 
-  def user(login, installation = school)
-    User.create!(school_installation: installation, name: 'Teacher', login: login,
-                 password: 'long-random-password')
-  end
+  let(:session) { voting_session }
+  let(:reason) { 'Power supply inspection' }
 
   def suspend(actor: creator, justification: reason)
     Voting::SuspendRound.call(round: round, actor: actor, reason: justification, now: now)
   end
 
   def confirm_first
-    Voting::Confirm.call(session: session, stage_id: round.voting_stages.order(:global_position).first.id,
-                         command_key: 'first-confirmation', kind: 'nominal',
-                         candidacy_id: contest.candidacies.order(:id).first.id, now: now)
-  end
-
-  before do
-    ElectionRole.create!(election: election, user: creator, role: 'creator')
-    ElectionRole.create!(election: election, user: pollworker, role: 'pollworker')
-    party = Party.create!(name: 'Lifecycle Test Party', abbreviation: 'LTP', party_number: 47)
-    ElectionPartyRegistration.create!(election: election, party: party, ballot_number: '47')
-    2.times do |index|
-      Candidacy.create!(contest: contest, principal_person: CandidatePerson.create!(name: "Person #{index}"),
-                        principal_party: party, ballot_number: "47#{index}")
-    end
-    Voting::OpenRound.call(round: round, actor: creator, now: now)
+    confirm_first_vote
   end
 
   it 'records the creator, reason and moment in operational records' do

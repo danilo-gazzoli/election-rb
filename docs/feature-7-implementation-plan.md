@@ -31,3 +31,5 @@ backend-rails/spec/services/voting/suspend_round_spec.rb.
 Fase vermelha informada por Danilo: 22 exemplos, 22 falhas por servico inexistente.
 Voting::SuspendRound implementado apos o vermelho: autorizacao, motivo, estado, auditoria, ocorrencia e aviso operacional. Fase verde informada por Danilo: 22 exemplos, 0 falhas. Confirm e demais servicos existentes ainda nao foram alterados neste incremento.
 Demais incrementos pendentes. A tarefa completa ainda nao esta entregue.
+
+Segundo incremento: testes de retomada, rotas suspend/resume, estado do dispositivo e contrato OpenAPI escritos. Preparo comum extraido dos testes de suspensao; incluir os 22 testes verdes no comando para validar essa refatoracao. Vermelho informado por Danilo: 68 exemplos, 44 falhas (a suspensao refatorada permaneceu verde). Apos o retorno, implementados ResumeRound, rotas suspend/resume, escopo da escola na autorizacao, round_state/stage bloqueada na API e esquemas OpenAPI. Sem novas migrations. Verde informado por Danilo: 68 exemplos, 0 falhas.

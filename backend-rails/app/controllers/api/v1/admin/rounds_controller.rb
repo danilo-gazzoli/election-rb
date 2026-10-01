@@ -6,6 +6,34 @@ module Api
       class RoundsController < BaseController
         before_action :require_user!
 
+        rescue_from ActiveRecord::RecordNotFound do
+          render_api_error(code: 'not_found', message: 'Round not found', status: :not_found)
+        end
+
+        def suspend
+          round = Round.find(params[:id])
+          return unless require_role!(round.election, 'creator')
+
+          ::Voting::SuspendRound.call(round: round, actor: current_user, reason: params[:reason])
+          render json: { state: round.state }
+        rescue ::Voting::SuspendRound::InvalidReason => e
+          render_api_error(code: 'invalid_reason', message: e.message, status: :unprocessable_entity)
+        rescue ::Voting::SuspendRound::NotAllowed => e
+          render_api_error(code: 'round_suspend_denied', message: e.message, status: :conflict)
+        end
+
+        def resume
+          round = Round.find(params[:id])
+          return unless require_role!(round.election, 'creator')
+
+          ::Voting::ResumeRound.call(round: round, actor: current_user, reason: params[:reason])
+          render json: { state: round.state }
+        rescue ::Voting::ResumeRound::InvalidReason => e
+          render_api_error(code: 'invalid_reason', message: e.message, status: :unprocessable_entity)
+        rescue ::Voting::ResumeRound::NotAllowed => e
+          render_api_error(code: 'round_resume_denied', message: e.message, status: :conflict)
+        end
+
         def open
           round = Round.find(params[:id])
           return unless require_role!(round.election, 'creator')

@@ -356,6 +356,96 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/rounds/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: suspendRound
+      summary: Suspend voting while preserving confirmed votes and session progress
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        New releases and confirmations are blocked. Previously committed confirmations
+        remain recoverable. State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Suspended round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_suspend_denied; the round is not open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/admin/rounds/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: resumeRound
+      summary: Resume the same ballot within the original voting schedule
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        Only a suspended round can resume, from opens_at inclusive until grace_until
+        exclusive. The original schedule is not extended. After closes_at, only
+        sessions already started can continue; new releases and starts remain blocked.
+        State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      responses:
+        '200':
+          description: Resumed round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_resume_denied; incompatible state or original grace period ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v1/admin/rounds/{id}/close:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
@@ -731,6 +821,22 @@ components:
               choice_index:
                 type: integer
                 minimum: 1
+    RoundTransitionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Operational justification; never include a voter identity or choice.
+    RoundTransitionResult:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [open, suspended]
     VotingDeviceSession:
       type: object
       required: [session_id, state]
@@ -742,10 +848,15 @@ components:
           type: string
     VotingDeviceState:
       type: object
-      required: [state]
+      required: [state, round_state]
       properties:
         state:
           type: string
+        round_state:
+          type: string
+          nullable: true
+          enum: [draft, scheduled, open, suspended, closed, annulled, null]
+          description: Latest session round state; null until the device has a session.
         session_id:
           type: string
           nullable: true
@@ -753,6 +864,7 @@ components:
           type: integer
           nullable: true
         stage:
+          description: Next stage only for an active session in an open round; null while suspended or inactive.
           type: object
           nullable: true
         last_receipt_id:

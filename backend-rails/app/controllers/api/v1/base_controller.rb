@@ -18,7 +18,8 @@ module Api
 
       def require_role!(election, role)
         return false unless current_user
-        return true if ElectionRole.exists?(election_id: election.id, user_id: current_user.id,
+        return true if current_user.school_installation_id == election.school_installation_id &&
+                       ElectionRole.exists?(election_id: election.id, user_id: current_user.id,
                                             role: role, active: true)
 
         render_api_error(code: 'forbidden', message: 'Role is required', status: :forbidden)

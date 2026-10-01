@@ -32,12 +32,14 @@ module Api
                                 status: :unauthorized) unless device
 
         active = device.voting_sessions.find_by(state: %w[released in_progress])
-        stage = active && VotingStage.find_by(round_id: active.round_id,
-                                              global_position: active.current_stage_position)
         latest = active || device.voting_sessions.order(released_at: :desc).first
+        round_state = latest&.round&.state
+        stage = if active && round_state == 'open'
+                  VotingStage.find_by(round_id: active.round_id, global_position: active.current_stage_position)
+                end
         receipt_session = latest if latest && %w[released in_progress completed].include?(latest.state)
         last_receipt = receipt_session&.confirmation_receipts&.order(confirmed_at: :desc)&.first
-        render json: { state: device.state, session_id: active&.id,
+        render json: { state: device.state, round_state: round_state, session_id: active&.id,
                        next_stage_position: active&.current_stage_position,
                        stage: stage && stage_catalog(stage), last_receipt_id: last_receipt&.id }
       end
