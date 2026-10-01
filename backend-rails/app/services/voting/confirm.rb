@@ -67,6 +67,7 @@ module Voting
     end
 
     def validate_command!
+      raise NotAllowed, 'election is cancelled' if @session.round.election.reload.canceled?
       raise Conflict, 'command key is required' unless @command_key.is_a?(String) && @command_key.present?
       raise Conflict, 'command key already used' if @session.confirmation_receipts.exists?(command_key: @command_key)
       raise NotAllowed, 'session is not active' unless %w[released in_progress].include?(@session.state)

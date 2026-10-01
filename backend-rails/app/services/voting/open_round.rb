@@ -62,6 +62,7 @@ module Voting
     end
 
     def validate_round!
+      raise NotAllowed, 'election is cancelled' if @round.election.reload.canceled?
       raise NotAllowed, 'round is already open or closed' unless %w[draft scheduled].include?(@round.state)
       raise NotAllowed, 'outside opening window' unless @now >= @round.opens_at && @now < @round.closes_at
       raise InvalidConfiguration, 'second round requires a separate runoff configuration' unless @round.number == 1

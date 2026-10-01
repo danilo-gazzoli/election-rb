@@ -18,6 +18,8 @@ module Voting
         session.with_lock do
           next session if %w[abandoned cancelled].include?(session.state)
 
+          raise NotAllowed, 'election is cancelled' if session.round.election.reload.canceled?
+
           raise NotAllowed, 'session is already completed' if session.state == 'completed'
 
           remaining_stages = []

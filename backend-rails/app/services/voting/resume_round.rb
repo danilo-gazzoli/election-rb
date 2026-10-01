@@ -14,6 +14,7 @@ module Voting
 
       reason = reason.strip
       device_ids = round.with_lock do
+        raise NotAllowed, 'election is cancelled' if round.election.reload.canceled?
         raise NotAllowed, 'only a suspended round can resume' unless round.state == 'suspended'
         raise NotAllowed, 'outside the original voting window' unless now >= round.opens_at && now < round.grace_until
 

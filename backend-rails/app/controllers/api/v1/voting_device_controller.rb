@@ -34,7 +34,7 @@ module Api
         active = device.voting_sessions.find_by(state: %w[released in_progress])
         latest = active || device.voting_sessions.order(released_at: :desc).first
         round_state = latest&.round&.state
-        stage = if active && round_state == 'open'
+        stage = if active && round_state == 'open' && !active.round.election.canceled?
                   VotingStage.find_by(round_id: active.round_id, global_position: active.current_stage_position)
                 end
         receipt_session = latest if latest && (
@@ -54,8 +54,10 @@ module Api
 
         active = device.voting_sessions.find_by(state: %w[released in_progress])
         if active.nil?
-          latest = device.voting_sessions.where(state: 'completed').order(released_at: :desc).first
-          active = latest if latest&.confirmation_receipts&.exists?(
+          latest = device.voting_sessions.order(released_at: :desc).first
+          recoverable = latest && (latest.state == 'completed' ||
+            (latest.state == 'cancelled' && latest.round.state == 'annulled'))
+          active = latest if recoverable && latest.confirmation_receipts.exists?(
             voting_stage_id: params[:stage_id], command_key: params[:command_key]
           )
         end

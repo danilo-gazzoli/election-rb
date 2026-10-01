@@ -6,6 +6,7 @@ module Voting
       round = round_contest.round.reload
       contest = round_contest.contest
       raise ArgumentError, 'wrong tally method' unless contest.method == 'simple_majority'
+      return { status: 'annulled', reason: 'election is cancelled' } if round.election.reload.canceled?
       return { status: 'annulled', reason: 'round is annulled' } if round.state == 'annulled'
       raise ArgumentError, 'round is not closed' unless round.state == 'closed'
 

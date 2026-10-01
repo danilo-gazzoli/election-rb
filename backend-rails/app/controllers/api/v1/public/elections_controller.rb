@@ -6,6 +6,8 @@ module Api
       class ElectionsController < BaseController
         def partial
           election = Election.find(params[:id])
+          return render_api_error(code: 'not_available', message: 'Election is cancelled',
+                                  status: :not_found) if election.canceled?
           round = election.rounds.where(state: %w[open suspended]).order(number: :desc).first
           return render_api_error(code: 'not_available', message: 'No active round',
                                   status: :not_found) unless round

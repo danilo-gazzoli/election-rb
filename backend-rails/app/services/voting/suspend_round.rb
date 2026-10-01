@@ -14,6 +14,7 @@ module Voting
 
       reason = reason.strip
       device_ids = round.with_lock do
+        raise NotAllowed, 'election is cancelled' if round.election.reload.canceled?
         raise NotAllowed, 'only an open round can be suspended' unless round.state == 'open'
 
         round.update!(state: 'suspended')

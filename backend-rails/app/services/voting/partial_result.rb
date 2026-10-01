@@ -16,7 +16,7 @@ module Voting
                                     .pluck(:candidacy_id)
 
       {
-        status: round.state == 'annulled' ? 'annulled' : 'partial',
+        status: (round.state == 'annulled' || round.election.reload.canceled?) ? 'annulled' : 'partial',
         participation: VotingSession.where(round_id: round.id).where.not(started_at: nil).count,
         confirmations: ConfirmationReceipt.joins(:voting_stage)
                                           .where(voting_stages: { round_contest_id: round_contest.id }).count,
