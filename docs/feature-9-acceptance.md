@@ -33,7 +33,7 @@ pendências legadas. Essa etapa está validada no PostgreSQL local do WSL.
 
 Usar o [servidor Rack local](../deployment/feature9/README.md), dados fictícios
 e um ambiente separado do uso escolar. Os oito testes do adaptador foram
-confirmados por Danilo, com zero falhas; a jornada real ainda está pendente. Arquivos do
+confirmados por Danilo, com zero falhas. Em 30/09/2026, Danilo iniciou Puma em 127.0.0.1:3000 e confirmou que a página abriu. A jornada de votação ainda precisa ser observada; usar o [roteiro com dados fictícios](feature-9-browser-rehearsal.md). Arquivos do
 frontend devem ser servidos por HTTP(S), com /api/v1 e /cable acessíveis na mesma
 origem. Não abrir o HTML diretamente como arquivo. Um criador provisionado
 configura eleição/partidos/disputa de duas vagas; o mesário opera a liberação.

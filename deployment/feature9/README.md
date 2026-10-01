@@ -13,8 +13,7 @@ cd /home/nilo/program/election-rb/backend-rails && env PATH=/home/nilo/.asdf/ins
 ```
 
 Danilo confirmou o vermelho com oito falhas e o verde com oito exemplos,
-zero falhas. A inicialização do servidor e o ensaio em navegador ainda
-aguardam validação.
+zero falhas. Danilo confirmou a inicialização do servidor e a abertura da página em 30/09/2026. O ensaio da votação segue o [roteiro com dados fictícios](../../docs/feature-9-browser-rehearsal.md).
 
 ## Preparar um banco exclusivo para o ensaio em navegador
 

@@ -1087,3 +1087,18 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   Inicialização do servidor e jornada real em navegador ainda aguardam Danilo.
 - Commit local desse incremento na mesma branch; sem push, atualização de PR
   ou merge. A evidência de Rack não foi apresentada como WebSocket real ou TLS.
+
+### 30/09/2026 — servidor iniciado e preparação do ensaio real
+
+- Danilo enviou migrations do banco election_f9_browser_20260930 e saída
+  do Puma 6.5.0/Ruby 3.2.0 em development, ouvindo 127.0.0.1:3000.
+  Confirmou que a página /votacao/index.html abriu no navegador.
+- Documentado roteiro com contas fictícias e papéis separados; configuração,
+  autenticação, abertura, liberação e abandono usam APIs existentes.
+  Cookie/CSRF do operador ficam no terminal, sem autenticar essa conta na urna.
+- Liberação pelo HTTP do Puma permite Cable async no processo correto.
+  Conferir 101 e state_changed: atualização visual também pode vir do polling.
+- Roteiro ainda não executado. Pareamento, WebSocket, votos, som, isolamento
+  e encerramento continuam aguardando Danilo. Nenhuma regra alterada.
+- structure.sql regenerado por Danilo permanece fora do commit de documentação.
+  Mesma feature branch; sem teste, migration, servidor ou envio remoto pelo agente.
