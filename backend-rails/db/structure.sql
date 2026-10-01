@@ -1,4 +1,4 @@
-\restrict FJ1Fi4Xe5VN3LgYiJxlZAoX3k7fmfieidMegpjoAH79zLkQg5sdk8OCW3lZbQgX
+\restrict Slc1ukCQyCw2CuFACnY82h4TlIac6WFn3kplAOsmWY2fqTNadWNgYEtnAdf9QpZ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -207,6 +207,19 @@ $$;
 
 
 --
+-- Name: deny_operational_evidence_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.deny_operational_evidence_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  RAISE EXCEPTION '% records are immutable', TG_TABLE_NAME;
+END;
+$$;
+
+
+--
 -- Name: deny_tally_run_mutation(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -311,6 +324,67 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: validate_incident_closure_evidence(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_incident_closure_evidence() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+  stage_value jsonb;
+BEGIN
+  IF NEW.kind NOT IN ('abandoned', 'cancelled') THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.user_id IS NULL OR NEW.voting_session_id IS NULL THEN
+    RAISE EXCEPTION 'closure evidence requires an operator and session';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM voting_sessions s
+    WHERE s.id = NEW.voting_session_id AND s.round_id = NEW.round_id
+  ) THEN
+    RAISE EXCEPTION 'closure session must belong to the incident round';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM rounds r
+    JOIN elections e ON e.id = r.election_id
+    JOIN users u ON u.school_installation_id = e.school_installation_id
+    WHERE r.id = NEW.round_id AND u.id = NEW.user_id
+  ) THEN
+    RAISE EXCEPTION 'closure operator must belong to the round school';
+  END IF;
+  IF jsonb_typeof(NEW.remaining_stage_ids) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'closure evidence requires an array of stage identifiers';
+  END IF;
+  IF NEW.kind = 'cancelled' AND jsonb_array_length(NEW.remaining_stage_ids) <> 0 THEN
+    RAISE EXCEPTION 'unstarted cancellation cannot contain pending stages';
+  END IF;
+  IF (
+    SELECT COUNT(*) <> COUNT(DISTINCT value)
+    FROM jsonb_array_elements(NEW.remaining_stage_ids)
+  ) THEN
+    RAISE EXCEPTION 'closure evidence cannot repeat stages';
+  END IF;
+
+  FOR stage_value IN SELECT value FROM jsonb_array_elements(NEW.remaining_stage_ids) LOOP
+    IF jsonb_typeof(stage_value) <> 'number' OR
+       (stage_value #>> '{}') !~ '^[1-9][0-9]*$' THEN
+      RAISE EXCEPTION 'closure stage identifiers must be positive integers';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM voting_stages st
+      WHERE st.round_id = NEW.round_id AND st.id::numeric = (stage_value #>> '{}')::numeric
+    ) THEN
+      RAISE EXCEPTION 'closure stage must belong to the incident round';
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$_$;
 
 
 --
@@ -1843,6 +1917,13 @@ CREATE UNIQUE INDEX idx_election_party_number ON public.election_party_registrat
 
 
 --
+-- Name: idx_known_session_closure; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_known_session_closure ON public.incidents USING btree (voting_session_id) WHERE (((kind)::text = ANY ((ARRAY['abandoned'::character varying, 'cancelled'::character varying])::text[])) AND (remaining_stage_ids IS NOT NULL));
+
+
+--
 -- Name: idx_on_school_installation_id_public_label_d894cc042e; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2326,6 +2407,13 @@ CREATE UNIQUE INDEX index_voting_stages_on_round_id_and_global_position ON publi
 
 
 --
+-- Name: audit_events audit_event_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER audit_event_immutable BEFORE DELETE OR UPDATE ON public.audit_events FOR EACH ROW EXECUTE FUNCTION public.deny_operational_evidence_mutation();
+
+
+--
 -- Name: candidacies candidacy_catalog_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2393,6 +2481,20 @@ CREATE TRIGGER contest_catalog_immutable BEFORE DELETE OR UPDATE ON public.conte
 --
 
 CREATE TRIGGER election_configuration_protected BEFORE DELETE OR UPDATE OF title, description, timezone, start_time, end_time, election_day, configuration_version, school_installation_id, creator_id ON public.elections FOR EACH ROW EXECUTE FUNCTION public.protect_election_configuration();
+
+
+--
+-- Name: incidents incident_closure_valid; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER incident_closure_valid BEFORE INSERT ON public.incidents FOR EACH ROW EXECUTE FUNCTION public.validate_incident_closure_evidence();
+
+
+--
+-- Name: incidents incident_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER incident_immutable BEFORE DELETE OR UPDATE ON public.incidents FOR EACH ROW EXECUTE FUNCTION public.deny_operational_evidence_mutation();
 
 
 --
@@ -2903,11 +3005,12 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict FJ1Fi4Xe5VN3LgYiJxlZAoX3k7fmfieidMegpjoAH79zLkQg5sdk8OCW3lZbQgX
+\unrestrict Slc1ukCQyCw2CuFACnY82h4TlIac6WFn3kplAOsmWY2fqTNadWNgYEtnAdf9QpZ
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261001020000'),
 ('20261001010000'),
 ('20260930130000'),
 ('20260930120000'),
