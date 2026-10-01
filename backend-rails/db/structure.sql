@@ -1,4 +1,4 @@
-\restrict OLX2j6iHaxDBRx7qrIbNa2EwrIMSLNHHR1g0armIx26WNLo5oDUmuOZgpFBNyZL
+\restrict FJ1Fi4Xe5VN3LgYiJxlZAoX3k7fmfieidMegpjoAH79zLkQg5sdk8OCW3lZbQgX
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -689,8 +689,8 @@ CREATE TABLE public.cast_votes (
     origin character varying NOT NULL,
     candidacy_id bigint,
     party_id bigint,
-    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY ((ARRAY['blank'::character varying, 'null'::character varying])::text[])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
-    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY ((ARRAY['confirmation'::character varying, 'abandonment'::character varying])::text[])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
+    CONSTRAINT chk_rails_2b2477a282 CHECK (((((kind)::text = 'nominal'::text) AND (candidacy_id IS NOT NULL) AND (party_id IS NULL)) OR (((kind)::text = 'legend'::text) AND (candidacy_id IS NULL) AND (party_id IS NOT NULL)) OR (((kind)::text = ANY (ARRAY[('blank'::character varying)::text, ('null'::character varying)::text])) AND (candidacy_id IS NULL) AND (party_id IS NULL)))),
+    CONSTRAINT chk_rails_6b3cea49ff CHECK ((((origin)::text = ANY (ARRAY[('confirmation'::character varying)::text, ('abandonment'::character varying)::text])) AND (((origin)::text <> 'abandonment'::text) OR ((kind)::text = 'null'::text))))
 );
 
 
@@ -824,7 +824,7 @@ CREATE TABLE public.election_roles (
     active boolean DEFAULT true NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY ((ARRAY['creator'::character varying, 'pollworker'::character varying])::text[])))
+    CONSTRAINT chk_rails_64e9ac1ffc CHECK (((role)::text = ANY (ARRAY[('creator'::character varying)::text, ('pollworker'::character varying)::text])))
 );
 
 
@@ -917,7 +917,9 @@ CREATE TABLE public.incidents (
     voting_session_id uuid,
     kind character varying NOT NULL,
     reason text NOT NULL,
-    occurred_at timestamp(6) without time zone NOT NULL
+    occurred_at timestamp(6) without time zone NOT NULL,
+    user_id bigint,
+    remaining_stage_ids jsonb
 );
 
 
@@ -1816,7 +1818,7 @@ ALTER TABLE ONLY public.voting_stages
 -- Name: idx_active_session_per_device; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY ((ARRAY['released'::character varying, 'in_progress'::character varying])::text[]));
+CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USING btree (voting_device_id) WHERE ((state)::text = ANY (ARRAY[('released'::character varying)::text, ('in_progress'::character varying)::text]));
 
 
 --
@@ -2132,6 +2134,13 @@ CREATE INDEX index_elections_on_school_installation_id ON public.elections USING
 --
 
 CREATE INDEX index_incidents_on_round_id ON public.incidents USING btree (round_id);
+
+
+--
+-- Name: index_incidents_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_incidents_on_user_id ON public.incidents USING btree (user_id);
 
 
 --
@@ -2643,6 +2652,14 @@ ALTER TABLE ONLY public.confirmation_receipts
 
 
 --
+-- Name: incidents fk_rails_6af30a70d3; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.incidents
+    ADD CONSTRAINT fk_rails_6af30a70d3 FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: confirmation_receipts fk_rails_6efa1a9c2f; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2886,11 +2903,12 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict OLX2j6iHaxDBRx7qrIbNa2EwrIMSLNHHR1g0armIx26WNLo5oDUmuOZgpFBNyZL
+\unrestrict FJ1Fi4Xe5VN3LgYiJxlZAoX3k7fmfieidMegpjoAH79zLkQg5sdk8OCW3lZbQgX
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261001010000'),
 ('20260930130000'),
 ('20260930120000'),
 ('20260930110000'),
