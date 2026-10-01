@@ -5,9 +5,9 @@ module Api
     module Admin
       class ElectionsController < BaseController
         before_action :require_user!
-        before_action :authorize_election!, only: %i[show update]
+        before_action :authorize_election!, only: %i[show update preview]
 
-        rescue_from ::Configuration::ManageElection::NotAllowed do |error|
+        rescue_from ::Configuration::ManageElection::NotAllowed, ::Configuration::PreviewElection::NotAllowed do |error|
           render_api_error(code: 'forbidden', message: error.message, status: :forbidden)
         end
         rescue_from ::Configuration::ManageElection::Locked do |error|
@@ -37,6 +37,10 @@ module Api
 
         def show
           render json: serialize(@election)
+        end
+
+        def preview
+          render json: ::Configuration::PreviewElection.call(election: @election, actor: current_user)
         end
 
         def create

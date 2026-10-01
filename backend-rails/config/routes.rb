@@ -10,6 +10,7 @@ Rails.application.routes.draw do
       post 'admin/elections', to: 'admin/elections#create'
       get 'admin/elections/:id', to: 'admin/elections#show'
       patch 'admin/elections/:id', to: 'admin/elections#update'
+      post 'admin/elections/:id/preview', to: 'admin/elections#preview'
       get 'admin/elections/:election_id/parties', to: 'admin/parties#index'
       post 'admin/elections/:election_id/parties', to: 'admin/parties#create'
       patch 'admin/elections/:election_id/parties/:id', to: 'admin/parties#update'

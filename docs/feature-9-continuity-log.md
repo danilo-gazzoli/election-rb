@@ -879,3 +879,73 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   e validação de implantação. Federações, segundo turno e conversão automática
   do legado não são entregas deste incremento. Próxima ação: commit na branch
   atual e atualização do PR #31 para develop, mantendo a issue #25 aberta.
+
+### Orientação atual: entrega agrupada na mesma branch
+
+- Danilo determinou manter todas as dependências restantes da tarefa 9 em
+  feature/two-choice-majoritarian. Não haverá push nem atualização de PR por
+  incremento; revisão/PR e eventual merge para develop ficam para a entrega
+  completa e validada. O PR já existente não foi alterado neste passo.
+- Backend anterior: regressão informada por Danilo de 334 exemplos, zero
+  falhas e 32 pendências legadas. Restam prévia da configuração pela API,
+  especificação/aceite integrado da interface e validação de implantação.
+- Escritos 11 testes de requisição para a prévia: autenticação, papel,
+  isolamento da escola, ausência de efeitos colaterais, identidade/agenda,
+  equivalência com a abertura, configuração incompleta e lista de problemas.
+- Produção ainda não alterada. Aguardando Danilo executar e fornecer o
+  vermelho antes da implementação, conforme o TDD obrigatório.
+
+### Prévia — implementação após vermelho confirmado
+
+- Danilo enviou 11 exemplos, 11 falhas: a rota inexistente retornava 404.
+- Implementada POST /api/v1/admin/elections/:id/preview, restrita ao criador
+  ativo da própria escola. Configuration::PreviewElection usa bloqueios da
+  eleição e primeiro turno para ler a configuração; não cria registros,
+  não abre o turno, não incrementa a versão e não gera auditoria de mutação.
+- Voting::BallotConfiguration concentra validação, ordem e montagem canônica
+  compartilhadas com Voting::OpenRound. Mantidos testes anteriores de abertura;
+  o novo teste compara a cédula da prévia com o snapshot e as etapas abertas.
+- A resposta informa valid, configuration_version, issues, ballot e stages.
+  Configuração incompleta retorna todos os problemas identificados, sem uma
+  cédula válida; a prévia pode ocorrer antes do horário de abertura.
+- Nenhum model persistido ou migration foi acrescentado. Não houve push,
+  alteração de PR ou merge. Apenas revisão estática; testes ficam com Danilo.
+- Escrito um teste de contrato OpenAPI ainda vermelho: a documentação antiga
+  marca a prévia como planejada e usa um envelope diferente. Próximo comando
+  verifica o verde das requisições e da abertura, e o vermelho desse contrato.
+
+### Prévia — correção do cenário de isolamento e contrato
+
+- Danilo executou 27 exemplos: 25 passaram e dois falharam. Os casos de
+  abertura e dez requisições da prévia passaram; ainda não há regressão geral
+  verde após a extração do montador de cédula.
+- O cenário de outra escola tentava fazer login com uma conta da segunda
+  instalação. AuthController seleciona a primeira instalação, coerente com o
+  deploy individual por escola, e recusou o login com 401 antes da prévia.
+- Corrigida a preparação do teste: login válido na escola original, seguido
+  da transferência do usuário para outra instalação. A expectativa continua
+  403 e verifica ausência de cédula, mesmo com permissão de criação e papel
+  previamente concedido. Nenhuma mudança de produção na autenticação.
+- Após o vermelho do contrato, OpenAPI descreve a prévia como implementada e
+  documenta valid/configuration_version/issues/ballot/stages, problemas por
+  disputa/candidatura e a diferença entre validade da configuração e janela
+  de abertura. Inventário de rotas atualizado para refletir essa entrega.
+- Próxima ação: Danilo executa a regressão Rails completa. Não houve execução
+  de testes pelo agente, migration, commit, push, alteração de PR ou merge.
+
+### Prévia — regressão completa confirmada
+
+- Danilo confirmou 346 exemplos, zero falhas e 32 pendências legadas.
+  O incremento adicionou 11 requisições e um contrato OpenAPI. A abertura
+  compartilha o montador de cédula com a prévia e a equivalência do snapshot
+  e das etapas está verificada na jornada de requisição.
+- Nenhum model persistido ou migration foi necessário. O ajuste de isolamento
+  testa uma sessão previamente válida cujo usuário passou a outra escola;
+  o login permanece limitado à instalação local.
+- Próximo incremento: requisitos/arquitetura da interface restritos à tarefa 9
+  e testes de limpeza do estado local entre sessões anônimas. A leitura mostrou
+  que recover exige um recibo para limpar estado e não compara session_id,
+  podendo conservar escolha/aviso após abandono ou liberação subsequente.
+- A prévia está validada no backend. O ensaio em navegador e a implantação
+  continuam sem validação. Permanecem a mesma branch, TDD executado por Danilo
+  e a orientação de nenhum push/PR/merge por incremento.

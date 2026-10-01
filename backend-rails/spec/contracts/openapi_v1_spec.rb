@@ -24,12 +24,13 @@ end
 RSpec.describe 'API v1 operation inventory' do
   let(:paths) { YAML.safe_load_file(Rails.root.join('openapi/v1.yaml')).fetch('paths') }
 
-  it 'marks tested routes as implemented and future operations as planned' do
+  it 'marks tested routes as implemented' do
     expect(paths.dig('/api/v1/health', 'get', 'x-implementation-status')).to eq('implemented')
 
     implemented = {
       '/api/v1/admin/elections' => 'post',
       '/api/v1/admin/elections/{id}' => 'get',
+      '/api/v1/admin/elections/{id}/preview' => 'post',
       '/api/v1/auth/session' => 'get',
       '/api/v1/auth/login' => 'post',
       '/api/v1/auth/logout' => 'post',
@@ -45,15 +46,5 @@ RSpec.describe 'API v1 operation inventory' do
       expect(paths.dig(path, method, 'x-implementation-status')).to eq('implemented')
     end
 
-    planned = {
-      '/api/v1/admin/elections/{id}/preview' => 'post'
-    }
-
-    planned.each do |path, method|
-      operation = paths.dig(path, method)
-      expect(operation.fetch('x-implementation-status')).to eq('planned')
-      expect(operation.fetch('x-authentication')).to be_a(String)
-      expect(operation.fetch('responses')).not_to be_empty
-    end
   end
 end

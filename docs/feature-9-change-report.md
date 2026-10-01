@@ -200,3 +200,15 @@ Validação final de eleição/agenda: Danilo confirmou **334 exemplos, 0 falhas
 nenhum novo model persistido. O teste de integração HTTP configura a eleição,
 partido e disputa e abre o turno somente com IDs da API, verificando snapshot
 na versão correta. Permanecem os limites de aceite do frontend e implantação.
+
+### Prévia da configuração
+
+- Acrescentados Configuration::PreviewElection e Voting::BallotConfiguration,
+  sem models persistidos ou migrations. OpenRound passou a reutilizar validação,
+  ordem das escolhas e cédula canônica, mantendo o congelamento no comando de abertura.
+- ElectionsController e routes incluem a consulta autenticada da prévia. Contrato
+  OpenAPI e documentação da administração descrevem problemas e versão consultada.
+- TDD confirmado por Danilo: 11/11 vermelho, 27/2 após implementação (preparação
+  do cenário de isolamento e contrato), regressão final 346/0/32 pendências.
+- Isolamento corrigido no teste de sessão transferida; nenhuma ampliação da
+  autenticação. Commit local, sem envio remoto ou merge nesta etapa.

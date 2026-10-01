@@ -22,17 +22,12 @@ module Voting
       @round.with_lock do
         validate_round!
         contests = @round.election.contests.order(:position).to_a
-        contests.each do |contest|
-          profile = ContestProfile.new(method: contest.method, seats: contest.seats,
-                                       choices_per_person: contest.choices_per_person,
-                                       has_vice: contest.has_vice)
-          raise InvalidConfiguration, "unsupported profile for #{contest.name}" unless profile.valid?
+        configuration = BallotConfiguration.call(round: @round)
+        unless configuration.fetch(:valid)
+          raise InvalidConfiguration, configuration.fetch(:issues).map { |issue| issue.fetch(:message) }.join('; ')
         end
-        plan = VotingStagePlan.call(contests.map do |contest|
-          { id: contest.id, position: contest.position, choices_per_person: contest.choices_per_person }
-        end)
-        validate_candidates!(contests)
-        snapshot_data = canonical_data(contests)
+        plan = configuration.fetch(:stages)
+        snapshot_data = configuration.fetch(:ballot)
         snapshot = ConfigurationSnapshot.create!(
           round: @round, version: @round.election.configuration_version,
           canonical_data: snapshot_data, digest: Digest::SHA256.hexdigest(JSON.generate(snapshot_data)),
@@ -72,79 +67,5 @@ module Voting
       raise InvalidConfiguration, 'second round requires a separate runoff configuration' unless @round.number == 1
     end
 
-    def validate_candidates!(contests)
-      raise InvalidConfiguration, 'at least one contest is required' if contests.empty?
-
-      contests.each do |contest|
-        minimum = contest.method == 'proportional' ? 1 : [contest.seats, 2].max
-        raise InvalidConfiguration, "insufficient candidacies for #{contest.name}" if
-          contest.candidacies.where(state: 'active').count < minimum
-
-        contest.candidacies.where(state: 'active').find_each do |candidate|
-          next if candidate.valid?
-
-          raise InvalidConfiguration, "invalid candidacy #{candidate.id}: #{candidate.errors.full_messages.join(', ').downcase}"
-        end
-
-        validate_unambiguous_numbers!(contest) if contest.method == 'proportional'
-      end
-    end
-
-    def validate_unambiguous_numbers!(contest)
-      party_numbers = ElectionPartyRegistration.where(election_id: contest.election_id).pluck(:ballot_number)
-      candidate_numbers = contest.candidacies.where(state: 'active').pluck(:ballot_number)
-      return if (party_numbers & candidate_numbers).empty?
-
-      raise InvalidConfiguration, "ambiguous ballot number in #{contest.name}"
-    end
-
-    def canonical_data(contests)
-      {
-        'round_number' => @round.number,
-        'rule_version' => @round.election.configuration_version,
-        'schedule' => {
-          'opens_at' => @round.opens_at.utc.iso8601(6),
-          'closes_at' => @round.closes_at.utc.iso8601(6),
-          'grace_until' => @round.grace_until.utc.iso8601(6),
-          'timezone' => @round.election.timezone.presence || @round.election.school_installation.timezone
-        },
-        'parties' => ElectionPartyRegistration.includes(:party)
-                                              .where(election_id: @round.election_id)
-                                              .order(:ballot_number)
-                                              .map do |registration|
-          {
-            'id' => registration.party_id,
-            'number' => registration.ballot_number,
-            'name' => registration.party.name,
-            'abbreviation' => registration.party.abbreviation
-          }
-        end,
-        'contests' => contests.map do |contest|
-          {
-            'id' => contest.id, 'name' => contest.name, 'position' => contest.position,
-            'method' => contest.method, 'rule_version' => contest.rule_version,
-            'has_vice' => contest.has_vice,
-            'seats' => contest.seats, 'choices_per_person' => contest.choices_per_person,
-            'candidacies' => contest.candidacies.includes(:principal_person, :vice_person)
-                                    .where(state: 'active').order(:id).map do |candidate|
-              data = {
-                'id' => candidate.id,
-                'number' => candidate.ballot_number,
-                'party_id' => candidate.principal_party_id,
-                'principal_person' => {
-                  'id' => candidate.principal_person_id,
-                  'name' => candidate.principal_person.name
-                }
-              }
-              if candidate.vice_person
-                data['vice_person'] = { 'id' => candidate.vice_person_id, 'name' => candidate.vice_person.name }
-                data['vice_party_id'] = candidate.vice_party_id
-              end
-              data
-            end
-          }
-        end
-      }
-    end
   end
 end

@@ -325,7 +325,8 @@ paths:
     post:
       operationId: previewElection
       summary: Validate the ballot before opening a round
-      x-implementation-status: planned
+      description: Read-only configuration check, including future schedules. Opening still enforces its time window. Invalid ballots return all identified issues and empty stages, without a snapshot or state change.
+      x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       responses:
         '200':
@@ -689,16 +690,47 @@ components:
           $ref: '#/components/schemas/FirstRoundAgenda'
     ElectionPreview:
       type: object
-      required: [stages, problems]
+      required: [valid, configuration_version, issues, ballot, stages]
       properties:
+        valid:
+          type: boolean
+          description: Configuration validity; does not authorize voting before the opening window.
+        configuration_version:
+          type: integer
+          minimum: 1
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum: [missing_round, missing_contests, unsupported_profile, insufficient_candidacies, invalid_candidacy, ambiguous_ballot_number, invalid_stage_order]
+              message:
+                type: string
+              contest_id:
+                type: integer
+              candidacy_id:
+                type: integer
+        ballot:
+          type: object
+          nullable: true
+          description: Canonical ballot used by opening, or null for an invalid configuration. Contains round_number, rule_version, schedule, parties and ordered contests with candidate identities and affiliations. Contains no votes or voting sessions.
         stages:
           type: array
           items:
             type: object
-        problems:
-          type: array
-          items:
-            type: object
+            required: [contest_id, global_position, choice_index]
+            properties:
+              contest_id:
+                type: integer
+              global_position:
+                type: integer
+                minimum: 1
+              choice_index:
+                type: integer
+                minimum: 1
     VotingDeviceSession:
       type: object
       required: [session_id, state]

@@ -106,3 +106,16 @@ jornada de configuração seguida da abertura somente com identificadores da API
 Permanecem prévia pela API, requisitos/aceite integrado da interface e validação
 de implantação. Segundo turno, federações e migração automática de registros
 legados compartilhados não foram entregues neste incremento.
+
+### Prévia entregue e validada — 30/09/2026
+
+POST /api/v1/admin/elections/:id/preview está implementado. A validação e a
+cédula canônica são compartilhadas com a abertura. Requisições cobrem permissão,
+isolamento, ordem, identidade/filiação, configuração incompleta, ausência de
+efeitos colaterais e equivalência do snapshot. Resultado informado por Danilo:
+346 exemplos, zero falhas e 32 pendências legadas na regressão Rails completa.
+
+Pendências atuais da tarefa 9: especificação/aceite integrado da interface,
+limpeza de estado local entre eleitores e validação da implantação. As linhas
+anteriores que descrevem a prévia como pendente são histórico dos incrementos.
+Não haverá atualização de PR ou merge antes da entrega agrupada.

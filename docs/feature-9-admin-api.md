@@ -119,3 +119,27 @@ SCHOOL_ID=identificador-da-escola CREATOR_LOGIN=login-do-professor bundle exec r
 
 Não usar o banco de teste para provisionar a conta de desenvolvimento ou de
 produção. A migration não promove automaticamente contas antigas ou mesários.
+
+## Prévia da cédula — tarefa 9
+
+`POST /api/v1/admin/elections/:id/preview` exige sessão autenticada, CSRF e
+papel ativo de criador na escola da eleição. Não exige um corpo JSON.
+A resposta 200 contém:
+
+- `valid`: validade da configuração, sem dispensar o horário de abertura.
+- `configuration_version`: versão consultada.
+- `issues`: problemas com `code`, `message` e, quando aplicável, `contest_id`
+  e `candidacy_id`. A resposta reúne os problemas identificados.
+- `ballot`: cédula canônica com agenda/fuso, partidos, cargos e candidaturas;
+  `null` quando há problemas.
+- `stages`: ordem das escolhas, com `contest_id`, `global_position` e
+  `choice_index`; lista vazia quando há problemas.
+
+A prévia pode ser consultada antes da data de votação. Não cria turno,
+snapshot, votos ou etapas persistidas, não muda a versão nem abre a eleição.
+A abertura revalida a configuração usando o mesmo montador e valida seu
+próprio horário; uma prévia anterior não congela a configuração.
+
+Danilo confirmou a regressão completa: 346 exemplos, zero falhas e 32
+pendências legadas. Requisitos da interface e ensaio integrado seguem
+como próximos incrementos, sem declarar a implantação validada.
