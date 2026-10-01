@@ -26,31 +26,34 @@ module Voting
 
     def call
       committed = false
-      result = @session.with_lock do
-        existing = @session.confirmation_receipts.find_by(voting_stage_id: @stage_id)
-        next confirmed(existing) if existing
+      # Match lifecycle commands: lock the round before its session.
+      result = @session.round.with_lock do
+        @session.with_lock do
+          existing = @session.confirmation_receipts.find_by(voting_stage_id: @stage_id)
+          next confirmed(existing) if existing
 
-        validate_command!
-        stage = VotingStage.find_by(id: @stage_id, round_id: @session.round_id,
-                                    global_position: @session.current_stage_position)
-        raise Conflict, 'unexpected voting stage' unless stage
+          validate_command!
+          stage = VotingStage.find_by(id: @stage_id, round_id: @session.round_id,
+                                      global_position: @session.current_stage_position)
+          raise Conflict, 'unexpected voting stage' unless stage
 
-        contest = stage.round_contest.contest
-        choice = classify_choice(contest)
-        if choice == :warning
-          next Result.new(status: :warning_required, receipt_id: nil,
-                          next_stage_position: @session.current_stage_position)
+          contest = stage.round_contest.contest
+          choice = classify_choice(contest)
+          if choice == :warning
+            next Result.new(status: :warning_required, receipt_id: nil,
+                            next_stage_position: @session.current_stage_position)
+          end
+
+          CastVote.create!(round: @session.round, contest: contest, voting_stage: stage,
+                           kind: choice, origin: 'confirmation',
+                           candidacy_id: choice == 'nominal' ? @candidacy_id : nil,
+                           party_id: choice == 'legend' ? @party_id : nil)
+          receipt = ConfirmationReceipt.create!(voting_session: @session, voting_stage: stage,
+                                                command_key: @command_key, confirmed_at: @now)
+          advance!(stage, contest, choice)
+          committed = true
+          confirmed(receipt)
         end
-
-        CastVote.create!(round: @session.round, contest: contest, voting_stage: stage,
-                         kind: choice, origin: 'confirmation',
-                         candidacy_id: choice == 'nominal' ? @candidacy_id : nil,
-                         party_id: choice == 'legend' ? @party_id : nil)
-        receipt = ConfirmationReceipt.create!(voting_session: @session, voting_stage: stage,
-                                              command_key: @command_key, confirmed_at: @now)
-        advance!(stage, contest, choice)
-        committed = true
-        confirmed(receipt)
       end
       NotifyDeviceState.call(device_id: @session.voting_device_id) if committed
       result

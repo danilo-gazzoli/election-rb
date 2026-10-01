@@ -59,3 +59,13 @@ Sexto vermelho informado por Danilo: 40 exemplos, 39 falhas (anexo f8fb6a7d-8997
 Regressao do sexto incremento informada por Danilo: 505 exemplos, 1 falha, 32 pendencias anteriores (anexo d73b59d9-3bf2-4f7b-b4c4-a3b97bdffb26). Falha isolada na preparacao do teste: ElectionRole ja impede cadastrar usuario de escola diferente. Corrigido somente o fixture: criar usuario/papel na escola da eleicao e depois mover a conta para outra escola, exigindo rejeicao pelo servico. Nenhuma protecao de producao removida ou implementacao alterada. Aguardando verde focal.
 
 Sexto verde focal informado por Danilo: 40 exemplos, 0 falhas. A regressao anterior passou nos demais exemplos e sua unica falha foi de preparacao do fixture corrigido. Incremento de anulacao validado; nenhum teste foi executado pelo agente. Proximo ciclo: concorrencia real com duas conexoes, esperas limitadas e observacao de locks no PostgreSQL.
+
+## Setimo ciclo: concorrencia real (aguardando vermelho)
+
+- Anulacao validada por Danilo: 40 exemplos, 0 falhas; commit 7bc2363.
+- Novo arquivo: spec/services/voting/lifecycle_concurrency_spec.rb, quatro exemplos, conexoes separadas e esperas limitadas.
+- Cenarios: voto esperando suspensao; ultima confirmacao disputando com anulacao; abandono aguardando anulacao; abandono simultaneo por dois operadores.
+- Nenhum servico modificado antes desse vermelho. Danilo executa o comando; resultado ainda desconhecido.
+- Depois deste ciclo permanecem as transicoes irreversiveis e os bloqueios de eleicao cancelada, seguidos de regressao e verificacao final do escopo.
+Setimo vermelho confirmado por Danilo em 2026-10-01: 4 exemplos, 2 falhas. Confirm aceitou um voto apos a suspensao e houve ActiveRecord::Deadlocked na disputa entre ultima confirmacao e anulacao. Apos essa evidencia, Confirm passou a bloquear Round antes de VotingSession, na mesma ordem dos comandos de ciclo de vida. Recuperacao de recibos continua antes da validacao de novos votos e notificacao permanece apos a transacao. Fato: correcao escrita e diff revisado; verde ainda desconhecido. Nenhuma migration ou teste executado pelo agente. A ordem dos locks de Abandon e sua disputa com Confirm ainda exigem evidencia concorrente especifica; este incremento nao declara todo o sistema seguro ou a F7 concluida.
+Setimo verde informado por Danilo: 55 exemplos, 0 falhas, incluindo concorrencia, confirmacao e anulacao. Ordem Round antes de Session em Confirm validada. Proximo vermelho: abandono concorrente e irreversibilidade dos estados do turno.
