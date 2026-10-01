@@ -8,10 +8,16 @@
   payload and authorization details must be finalized with the feature that
   implements it.
 
-The only implemented v1 operation in this foundation is `GET /api/v1/health`.
+Authentication, device pairing, poll-worker release, device state and
+confirmation, and the public partial are available as tested API slices.
+The contract marks each implemented operation explicitly.
 Unknown paths under `/api/v1` return a JSON `not_found` error. Existing
 server-rendered routes remain available during migration to the separate
 frontend.
+
+The voting interface is device-independent: a managed phone, computer, or
+tablet can host it. Planned API paths use `voting-device` for this role. The
+server controls release and confirmation regardless of screen type.
 
 The full RSpec suite includes `spec/contracts/openapi_v1_spec.rb` and the
 request checks. CI first migrates an empty PostgreSQL database, then runs the

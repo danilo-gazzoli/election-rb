@@ -1,0 +1,23 @@
+:root { color-scheme: light; font: 18px/1.5 system-ui, sans-serif; background: #f2f6f8; color: #102638; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.shell { max-width: 760px; min-height: 100vh; margin: 0 auto; padding: clamp(20px, 5vw, 48px); }
+.eyebrow { color: #255d7f; font-size: .85rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.1; margin: .25em 0; }
+h2 { font-size: clamp(1.45rem, 4vw, 2rem); line-height: 1.2; margin-top: 0; }
+.panel { margin-top: 28px; padding: clamp(20px, 4vw, 34px); background: #fff; border: 1px solid #cbd9e2; border-radius: 18px; box-shadow: 0 10px 30px #1230490e; }
+.panel[hidden] { display: none; }
+.warning { border: 3px solid #b05e12; background: #fff8ef; }
+.choices { display: grid; gap: 12px; margin: 28px 0; }
+button { min-height: 52px; padding: 11px 18px; border: 2px solid #123049; border-radius: 10px; background: #123049; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+button:hover { background: #23577d; }
+button:focus-visible, input:focus-visible { outline: 4px solid #f1ab33; outline-offset: 3px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary, .choices button { color: #123049; background: #fff; }
+.choices button { width: 100%; text-align: left; }
+.choices button[aria-pressed="true"] { border-color: #077454; background: #e3f6ed; box-shadow: inset 0 0 0 1px #077454; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+label { display: block; font-weight: 700; margin: 18px 0 8px; }
+input { display: block; width: 100%; min-height: 52px; padding: 10px 14px; border: 2px solid #58758b; border-radius: 10px; font: inherit; margin-bottom: 18px; }
+.message { min-height: 1.5em; margin-top: 24px; color: #8b2f18; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

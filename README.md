@@ -23,7 +23,7 @@ This system is designed to manage:
 
 - **School Elections** (e.g., student council, class leaders, or simulations of municipal elections).
 - **Candidates and Parties**, supporting positions with a vice-candidate and a variable number of seats.
-- **Ballots (tablets)** serving as voting terminals, requiring a validation code provided by a poll worker (mesário) before each vote.
+- **Voting devices** such as managed phones, tablets, or computers, released for each voter by a poll worker after an identity check against a physical list.
 - **Security Logs**, accessible to the public, to see which user performed which actions and when.
 - **Cached Results** updated every 15 minutes, reducing costs and preventing database overload.
 

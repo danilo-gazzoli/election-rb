@@ -27,7 +27,7 @@ paths:
     get:
       operationId: getUserSession
       summary: Read the current user session and CSRF token
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: optional-user-session
       responses:
         '200':
@@ -43,7 +43,7 @@ paths:
     post:
       operationId: loginUser
       summary: Authenticate a creator or poll worker
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: anonymous-with-csrf
       requestBody:
         required: true
@@ -65,7 +65,7 @@ paths:
     post:
       operationId: logoutUser
       summary: End the current user session
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: user-session-with-csrf
       responses:
         '204':
@@ -73,37 +73,197 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/admin/elections:
+  /api/v1/admin/elections/{election_id}/parties:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
     get:
-      operationId: listElections
-      summary: List elections visible to the authenticated creator
-      x-implementation-status: planned
-      x-authentication: creator-session
+      operationId: listElectionParties
+      summary: List parties participating in the creator's election
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
       responses:
         '200':
-          description: Election summaries
+          description: Election party catalog with canonical ballot numbers
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Election'
+                type: object
+                required: [parties]
+                properties:
+                  parties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Party'
         default:
           $ref: '#/components/responses/ApiError'
     post:
-      operationId: createElection
-      summary: Create a draft election
-      x-implementation-status: planned
+      operationId: createElectionParty
+      summary: Create a party and its election registration atomically
+      description: >-
+        Requires a creator role in this election. Creates an election-owned
+        record and an audit event. Abbreviation and number are unique within
+        this election. Rejects changes after any round opens.
+      x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ElectionDraft'
+              $ref: '#/components/schemas/PartyCreateRequest'
       responses:
         '201':
-          description: Created election
+          description: Party and registration persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/parties/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateElectionParty
+      summary: Edit an owned draft party and synchronize its registration
+      description: >-
+        Accepts partial party attributes. Requires ownership by this election
+        and a creator role. Party, registration and audit event are updated
+        atomically. Rejects changes after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyUpdateRequest'
+      responses:
+        '200':
+          description: Updated party
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+        default:
+          $ref: '#/components/responses/ApiError'
+    delete:
+      operationId: deleteElectionParty
+      summary: Delete an unused owned draft party and its registration
+      description: >-
+        Requires a creator role. Returns 409 when the catalog is frozen or
+        election data reference the party. An audit event survives successful
+        deletion; a failure rolls back the complete command.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '204':
+          description: Party and registration deleted with an audit event
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/contests:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createContest
+      summary: Create a draft contest and affiliated candidacies atomically
+      description: >-
+        Requires a creator role in this election and registered parties.
+        Rejects configuration after a round opens. The server determines the
+        election and rule version; clients cannot override these fields.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContestConfigurationRequest'
+      responses:
+        '201':
+          description: Contest and candidacies persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections:
+    get:
+      operationId: listElections
+      summary: List elections with an active creator role in the current school
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Election configurations visible to this user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [elections]
+                properties:
+                  elections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElection
+      summary: Atomically create a draft election, agenda, creator role and audit
+      description: >-
+        Requires an active account provisioned with can_create_elections.
+        School and creator are derived from the authenticated user.
+        The first-round grace period is ten minutes; all records roll back
+        when any input is invalid. This API cannot grant creation permission.
+      x-implementation-status: implemented
+      x-authentication: provisioned-creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectionCreateRequest'
+      responses:
+        '201':
+          description: Draft election configuration
           content:
             application/json:
               schema:
@@ -113,15 +273,19 @@ paths:
 
   /api/v1/admin/elections/{id}:
     parameters:
-      - $ref: '#/components/parameters/ResourceId'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
     get:
       operationId: getElection
-      summary: Read an election configuration
-      x-implementation-status: planned
+      summary: Read an election configuration and its first-round agenda
+      x-implementation-status: implemented
       x-authentication: creator-session
       responses:
         '200':
-          description: Election configuration
+          description: Election configuration with authoritative round state
           content:
             application/json:
               schema:
@@ -130,18 +294,24 @@ paths:
           $ref: '#/components/responses/ApiError'
     patch:
       operationId: updateElection
-      summary: Update an election that has not opened
-      x-implementation-status: planned
+      summary: Atomically edit draft metadata and first-round agenda
+      description: >-
+        Requires a creator role and the current integer configuration_version.
+        Stale versions return 409 stale_configuration. An opened, suspended,
+        closed or annulled round returns 409 configuration_locked. The agenda,
+        legacy calendar fields, version and audit event change atomically.
+        Changes to parties and contests also increment this version.
+      x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ElectionDraft'
+              $ref: '#/components/schemas/ElectionUpdateRequest'
       responses:
         '200':
-          description: Updated election
+          description: Updated election with its new configuration version
           content:
             application/json:
               schema:
@@ -155,7 +325,8 @@ paths:
     post:
       operationId: previewElection
       summary: Validate the ballot before opening a round
-      x-implementation-status: planned
+      description: Read-only configuration check, including future schedules. Opening still enforces its time window. Invalid ballots return all identified issues and empty stages, without a snapshot or state change.
+      x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       responses:
         '200':
@@ -167,14 +338,49 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/pollworker/tablets/{id}/release:
+  /api/v1/admin/rounds/{id}/open:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
-      - $ref: '#/components/parameters/IdempotencyKey'
     post:
-      operationId: releaseTablet
+      operationId: openRound
+      summary: Freeze a valid round configuration and open consecutive voting stages
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Opened round state, snapshot digest and ordered stages
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/rounds/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: closeRound
+      summary: Close after the grace period and persist reconciled tallies
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Closed round and final or pending tally states
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/pollworker/voting-devices/{id}/release:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: releaseVotingDevice
       summary: Release one anonymous voting session after physical identity check
-      x-implementation-status: planned
+      x-implementation-status: implemented
       x-authentication: poll-worker-session-with-csrf
       responses:
         '200':
@@ -182,34 +388,32 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TabletSession'
+                $ref: '#/components/schemas/VotingDeviceSession'
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/tablet/state:
+  /api/v1/voting-device/state:
     get:
-      operationId: getTabletState
-      summary: Recover authoritative tablet state after release or reconnection
-      x-implementation-status: planned
-      x-authentication: tablet-credential
+      operationId: getVotingDeviceState
+      summary: Recover authoritative voting device state after release or reconnection
+      x-implementation-status: implemented
+      x-authentication: voting-device-credential
       responses:
         '200':
-          description: Tablet state without a previously confirmed choice
+          description: Voting device state without a previously confirmed choice
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TabletState'
+                $ref: '#/components/schemas/VotingDeviceState'
         default:
           $ref: '#/components/responses/ApiError'
 
-  /api/v1/tablet/confirmations:
-    parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
+  /api/v1/voting-device/confirmations:
     post:
       operationId: confirmVote
       summary: Confirm exactly one voting stage
-      x-implementation-status: planned
-      x-authentication: tablet-credential-with-csrf
+      x-implementation-status: implemented
+      x-authentication: voting-device-credential-with-csrf
       requestBody:
         required: true
         content:
@@ -223,6 +427,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfirmationReceipt'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/public/elections/{id}/partial:
+    get:
+      operationId: getPartialResults
+      summary: Read aggregate partial counts without a winner
+      x-implementation-status: implemented
+      x-authentication: public
+      responses:
+        '200':
+          description: Aggregate partial results
+          content:
+            application/json:
+              schema:
+                type: object
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -249,6 +469,50 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    PartyAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 10
+          maxLength: 50
+        abbreviation:
+          type: string
+          minLength: 2
+          maxLength: 8
+          pattern: '^[A-Z]+$'
+        ballot_number:
+          type: string
+          pattern: '^(0[1-9]|[1-9][0-9])$'
+          description: Canonical two-digit number from 01 through 99.
+        description:
+          type: string
+          nullable: true
+          minLength: 15
+          maxLength: 500
+    Party:
+      allOf:
+        - $ref: '#/components/schemas/PartyAttributes'
+        - type: object
+          required: [id, name, abbreviation, ballot_number]
+          properties:
+            id:
+              type: integer
+    PartyCreateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          type: object
+          required: [name, abbreviation, ballot_number]
+          allOf:
+            - $ref: '#/components/schemas/PartyAttributes'
+    PartyUpdateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          $ref: '#/components/schemas/PartyAttributes'
     Error:
       type: object
       required: [error]
@@ -279,14 +543,18 @@ components:
           enum: [v1]
     UserSession:
       type: object
-      required: [authenticated]
+      required: [user, csrf_token]
       properties:
-        authenticated:
-          type: boolean
-        roles:
-          type: array
-          items:
-            type: string
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            login:
+              type: string
         csrf_token:
           type: string
           description: Provided for same-origin mutating requests; never a login credential.
@@ -299,48 +567,171 @@ components:
         password:
           type: string
           format: password
-    ElectionDraft:
+    ContestConfigurationRequest:
       type: object
-      required: [title, timezone]
+      required: [contest]
+      properties:
+        contest:
+          type: object
+          required: [name, position, method, seats, choices_per_person]
+          properties:
+            name:
+              type: string
+            position:
+              type: integer
+              minimum: 1
+            method:
+              type: string
+              enum: [simple_majority, absolute_majority, proportional]
+            seats:
+              type: integer
+              minimum: 1
+            choices_per_person:
+              type: integer
+              minimum: 1
+            has_vice:
+              type: boolean
+              description: This creation operation supports candidacies without a vice.
+            candidacies:
+              type: array
+              items:
+                type: object
+                required: [principal_name, principal_party_id, ballot_number]
+                properties:
+                  principal_name:
+                    type: string
+                  principal_party_id:
+                    type: integer
+                  ballot_number:
+                    type: string
+    ElectionAttributes:
+      type: object
       properties:
         title:
           type: string
+          minLength: 5
+          maxLength: 100
         description:
           type: string
+          minLength: 10
+          maxLength: 200
         timezone:
           type: string
+          description: Recognized Rails or IANA timezone, such as America/Sao_Paulo.
+        opens_at:
+          type: string
+          format: date-time
+          description: Future ISO 8601 instant with explicit offset or Z.
+        closes_at:
+          type: string
+          format: date-time
+          description: ISO 8601 instant with explicit offset, strictly after opening.
+        configuration_version:
+          type: integer
+          minimum: 1
+          description: Required on edits; must match the current configuration version.
+    ElectionCreateRequest:
+      type: object
+      required: [election]
+      properties:
+        election:
+          type: object
+          required: [title, description, timezone, opens_at, closes_at]
+          allOf:
+            - $ref: '#/components/schemas/ElectionAttributes'
+    ElectionUpdateRequest:
+      type: object
+      required: [election]
+      properties:
+        election:
+          type: object
+          required: [configuration_version]
+          allOf:
+            - $ref: '#/components/schemas/ElectionAttributes'
+    FirstRoundAgenda:
+      type: object
+      required: [id, number, opens_at, closes_at, grace_until]
+      properties:
+        id:
+          type: integer
+          description: Identifier used by the round opening and closing endpoints.
+        number:
+          type: integer
+          enum: [1]
         opens_at:
           type: string
           format: date-time
         closes_at:
           type: string
           format: date-time
+        grace_until:
+          type: string
+          format: date-time
+          description: Closing instant plus ten minutes.
+    Election:
+      type: object
+      required: [id, title, description, timezone, state, configuration_version, first_round]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+        state:
+          type: string
+          enum: [draft, scheduled, open, suspended, closed, annulled]
         configuration_version:
           type: integer
-          description: Required for updates once optimistic concurrency is implemented.
-    Election:
-      allOf:
-        - $ref: '#/components/schemas/ElectionDraft'
-        - type: object
-          required: [id, state]
-          properties:
-            id:
-              type: string
-            state:
-              type: string
+          minimum: 1
+        first_round:
+          $ref: '#/components/schemas/FirstRoundAgenda'
     ElectionPreview:
       type: object
-      required: [stages, problems]
+      required: [valid, configuration_version, issues, ballot, stages]
       properties:
+        valid:
+          type: boolean
+          description: Configuration validity; does not authorize voting before the opening window.
+        configuration_version:
+          type: integer
+          minimum: 1
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum: [missing_round, missing_contests, unsupported_profile, insufficient_candidacies, invalid_candidacy, ambiguous_ballot_number, invalid_stage_order]
+              message:
+                type: string
+              contest_id:
+                type: integer
+              candidacy_id:
+                type: integer
+        ballot:
+          type: object
+          nullable: true
+          description: Canonical ballot used by opening, or null for an invalid configuration. Contains round_number, rule_version, schedule, parties and ordered contests with candidate identities and affiliations. Contains no votes or voting sessions.
         stages:
           type: array
           items:
             type: object
-        problems:
-          type: array
-          items:
-            type: object
-    TabletSession:
+            required: [contest_id, global_position, choice_index]
+            properties:
+              contest_id:
+                type: integer
+              global_position:
+                type: integer
+                minimum: 1
+              choice_index:
+                type: integer
+                minimum: 1
+    VotingDeviceSession:
       type: object
       required: [session_id, state]
       properties:
@@ -349,31 +740,41 @@ components:
           format: uuid
         state:
           type: string
-    TabletState:
+    VotingDeviceState:
       type: object
       required: [state]
       properties:
         state:
           type: string
-        next_stage_id:
+        session_id:
           type: string
+          nullable: true
+        next_stage_position:
+          type: integer
+          nullable: true
+        stage:
+          type: object
           nullable: true
         last_receipt_id:
           type: string
+          format: uuid
           nullable: true
     ConfirmationIntent:
       type: object
-      required: [stage_id, kind]
+      required: [stage_id, command_key, kind]
       properties:
         stage_id:
+          type: integer
+        command_key:
           type: string
         kind:
           type: string
-          enum: [nominal, legenda, branco, nulo]
-        number:
-          type: string
-          description: Present only for nominal or legenda input; leading zeroes matter.
-        warning_accepted:
+          enum: [nominal, legend, blank, 'null']
+        candidacy_id:
+          type: integer
+        party_id:
+          type: integer
+        warning_acknowledged:
           type: boolean
     ConfirmationReceipt:
       type: object
@@ -385,6 +786,5 @@ components:
         status:
           type: string
           enum: [confirmed]
-        next_stage_id:
-          type: string
-          nullable: true
+        next_stage_position:
+          type: integer

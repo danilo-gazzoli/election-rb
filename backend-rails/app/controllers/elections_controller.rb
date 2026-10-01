@@ -2,11 +2,11 @@
 
 class ElectionsController < ApplicationController
   def index
-    @elections = Election.all
+    @elections = Election.where(school_installation_id: nil)
   end
 
   def show
-    @election = Election.find_by(id: params[:id])
+    @election = Election.find_by(id: params[:id], school_installation_id: nil)
     return if @election
 
     head :not_found
@@ -24,14 +24,14 @@ class ElectionsController < ApplicationController
   end
 
   def edit
-    @election = Election.find_by(id: params[:id])
+    @election = Election.find_by(id: params[:id], school_installation_id: nil)
     return if @election
 
     head :not_found
   end
 
   def update
-    @election = Election.find_by(id: params[:id])
+    @election = Election.find_by(id: params[:id], school_installation_id: nil)
 
     return head :not_found unless @election
 
@@ -41,7 +41,7 @@ class ElectionsController < ApplicationController
   end
 
   def destroy
-    @election = Election.find_by(id: params[:id])
+    @election = Election.find_by(id: params[:id], school_installation_id: nil)
     return head :not_found unless @election
 
     @election.destroy

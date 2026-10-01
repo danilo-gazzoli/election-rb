@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class Election < ApplicationRecord
+  belongs_to :school_installation, optional: true
+  belongs_to :creator, class_name: 'User', optional: true
+  has_many :rounds, dependent: :restrict_with_exception
+  has_many :contests, dependent: :restrict_with_exception
   has_and_belongs_to_many :parties
   has_and_belongs_to_many :offices
   has_many :candidates
@@ -47,7 +51,9 @@ class Election < ApplicationRecord
       return
     end
 
-    return unless election_day < Date.today
+    zone = ActiveSupport::TimeZone[timezone] if school_installation_id.present? && timezone.present?
+    today = zone ? Time.current.in_time_zone(zone).to_date : Time.zone.today
+    return unless election_day < today
 
     errors.add(:election_day, 'must be a future date')
   end
