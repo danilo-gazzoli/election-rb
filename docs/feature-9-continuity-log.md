@@ -1102,3 +1102,13 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   e encerramento continuam aguardando Danilo. Nenhuma regra alterada.
 - structure.sql regenerado por Danilo permanece fora do commit de documentação.
   Mesma feature branch; sem teste, migration, servidor ou envio remoto pelo agente.
+
+### Retomada do ensaio depois de encerrar o console
+
+- O primeiro HTTP falhou com ECONNREFUSED após persistir escola e duas contas.
+  Danilo fechou e reabriu IRB; as senhas aleatórias e variáveis foram perdidas.
+- Documentado bloco operacional para verificar banco exclusivo e health antes
+  de trocar as duas senhas fictícias e continuar somente os endpoints faltantes.
+  Escola e usuários não são recriados; se existir eleição, parar para conferir.
+- Recuperação ainda não executada por Danilo. Nenhuma regra/model/migration
+  alterada e nenhum teste, servidor ou operação no banco executado pelo agente.

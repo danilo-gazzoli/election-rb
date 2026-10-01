@@ -66,6 +66,7 @@ repetir a criação nem apagar o banco.
 begin
   raise 'Banco ou ambiente incorreto' unless Rails.env.development? &&
     ActiveRecord::Base.connection_db_config.database == 'election_f9_browser_20260930'
+  f9(:get, '/health')
   raise 'Banco ja provisionado; nao repetir a criacao' if SchoolInstallation.exists? || User.exists? || Election.exists?
   $f9_creator_password = SecureRandom.hex(24)
   $f9_pollworker_password = SecureRandom.hex(24)
@@ -182,3 +183,40 @@ O som atual é sintetizado. Este ensaio não verifica som oficial, hardware
 diferente, HTTPS/WSS, restauração de backup ou capacidade. Falhas observadas
 exigem teste vermelho executado por Danilo antes da correção.
 Demais cenários: [roteiro de aceite](feature-9-acceptance.md).
+
+## Recuperar este provisionamento parcial após fechar o console
+
+Usar somente quando a escola e as contas fictícias foram criadas, o primeiro
+HTTP falhou e nenhuma eleição existe nesse banco. Manter Puma em outro
+terminal e abrir o console conforme a etapa 1. O bloco primeiro verifica
+ambiente, banco e conexão; depois troca apenas as senhas fictícias perdidas
+e retoma a configuração pela API. Não recria escola ou usuários.
+
+~~~ruby
+begin
+  raise 'Banco ou ambiente incorreto' unless Rails.env.development? &&
+    ActiveRecord::Base.connection_db_config.database == 'election_f9_browser_20260930'
+  blocos = File.read(Rails.root.join('../docs/feature-9-browser-rehearsal.md')).scan(/~~~ruby\r?\n(.*?)\r?\n~~~/m)
+  etapa = blocos.fetch(1).first
+  inicio = etapa.index("  f9(:get, '/auth/session')")
+  raise 'Roteiro de retomada incompleto' unless inicio
+  eval(blocos.fetch(0).first, TOPLEVEL_BINDING)
+  f9(:get, '/health')
+  raise 'Eleicao ja existe; parar para conferir a configuracao' if Election.exists?
+  $f9_school = SchoolInstallation.find_by!(identifier: 'ensaio-f9')
+  $f9_creator = User.find_by!(school_installation: $f9_school, login: 'criador-f9')
+  $f9_pollworker = User.find_by!(school_installation: $f9_school, login: 'mesario-f9')
+  $f9_creator_password = SecureRandom.hex(24)
+  $f9_pollworker_password = SecureRandom.hex(24)
+  User.transaction do
+    $f9_creator.update!(password: $f9_creator_password, password_confirmation: $f9_creator_password)
+    $f9_pollworker.update!(password: $f9_pollworker_password, password_confirmation: $f9_pollworker_password)
+  end
+  eval("begin\n#{etapa[inicio..]}", TOPLEVEL_BINDING)
+  nil
+end
+~~~
+
+O código temporário deve ser usado na página antes de dez minutos. Enviar
+somente se chegou a Aguardando liberação ou a mensagem de erro, sem código,
+senha ou cookie. Não repetir automaticamente o bloco após um erro.
