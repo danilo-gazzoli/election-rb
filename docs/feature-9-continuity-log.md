@@ -1055,3 +1055,35 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   Danilo deve executar o vermelho antes da implementação. Os testes não fazem
   conexão WebSocket real nem validam TLS ou navegador: validam o roteamento
   e a conservação das informações exigidas pelos componentes existentes.
+
+### Servidor do ensaio — implementação após oito falhas
+
+- Danilo confirmou oito exemplos e oito falhas, todos por ausência do módulo
+  Feature9. Implementado o gateway Rack que serve somente a página, três
+  módulos JavaScript e CSS, e delega API v1/Cable ao Rails sem alterar o env.
+- Reutilizado Rack::Files instalado na versão travada pelo projeto, para MIME,
+  GET/HEAD e leitura dos arquivos. A lista de caminhos impede exposição do
+  repositório, testes e travessia de diretório; rotas MVC legadas ficam fora
+  da superfície desse servidor. Não altera a configuração das rotas Rails.
+- Criada entrada config.ru seguindo a inicialização já usada pelo backend,
+  com Rails.application.load_server. Documentados banco separado e comando
+  Puma em loopback para o ensaio em navegador, usando gems já existentes.
+- Produção escolar/TLS/áudio permanecem sem ensaio. Aguardar verde dos oito
+  testes enviado por Danilo antes de commit. Nenhum teste, migration, servidor,
+  instalação de pacote, push, atualização de PR ou merge executado pelo agente.
+
+### Servidor do ensaio — verde confirmado
+
+- Danilo confirmou oito exemplos, zero falhas no adaptador de mesma origem.
+  Validados página/módulos, fronteira estática, bloqueio do legado, preservação
+  de método/corpo/cookie/CSRF, passagem das informações Cable, HEAD e saúde
+  real do Rails por Rack. Nenhum pacote, model ou migration novo.
+- Próxima verificação operacional: criar banco exclusivo de navegador e
+  iniciar Puma com a entrada Rack. Usar --no-config para evitar que a porta
+  padrão de config/puma.rb acrescente bind distinto do loopback informado.
+  A opção foi conferida no código da gem Puma 6.5.0 travada no Gemfile.lock.
+- Backend mantém evidência anterior 346/0/32 pendências; frontend 20/0.
+  A regressão completa incluindo os oito testes novos ainda não foi executada.
+  Inicialização do servidor e jornada real em navegador ainda aguardam Danilo.
+- Commit local desse incremento na mesma branch; sem push, atualização de PR
+  ou merge. A evidência de Rack não foi apresentada como WebSocket real ou TLS.

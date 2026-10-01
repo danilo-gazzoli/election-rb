@@ -130,3 +130,14 @@ Nenhum model, migration ou pacote novo foi necessário.
 Restam evidências de instalação nova e ensaio em navegador/mesma origem, áudio,
 TLS/WebSocket e restauração. Roteiro em feature-9-acceptance.md. Esses ensaios
 não foram executados pelo agente. Nenhum envio remoto ou merge por incremento.
+
+### Servidor de ensaio — mesma origem validada por Rack
+
+Acrescentado deployment/feature9 com adaptador, entrada Rack e instruções de
+banco/Puma em loopback. Danilo executou oito testes vermelhos, depois oito
+verdes. O frontend segue separado; Rails autoriza e persiste. Sem pacote,
+model ou migration adicional. A superfície do ensaio exclui as rotas legadas.
+
+Faltam inicialização/jornada no navegador e demais verificações reais descritas
+no roteiro de aceite. O encaminhamento Cable testado por Rack conserva o env;
+não estabelece uma conexão WebSocket real. Nenhum envio remoto ou merge.

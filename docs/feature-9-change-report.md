@@ -226,3 +226,14 @@ na versão correta. Permanecem os limites de aceite do frontend e implantação.
   Sem models, migrations ou dependências novas; sem alteração no Rails.
 - Limites: navegador real, áudio e implantação ainda não validados. O harness
   não foi apresentado como teste ponta a ponta do produto.
+
+### Entrada do ensaio em mesma origem
+
+- Criados deployment/feature9/same_origin_gateway.rb e config.ru, com Rack/Puma
+  existentes. Lista explícita dos arquivos públicos, delegação de API/Cable
+  sem alterações e bloqueio dos demais caminhos, incluindo CRUD legado.
+- Oito novos testes de requisição Rack: vermelho 8/8, verde 8/0 confirmado por
+  Danilo. Saúde real do Rails coberta; TLS/navegador/WebSocket reais pendentes.
+- README com banco exclusivo e inicialização em loopback. --no-config evita
+  mistura com binds da configuração Puma original. Código de negócio Rails,
+  models e migrations permaneceram sem alterações neste incremento.

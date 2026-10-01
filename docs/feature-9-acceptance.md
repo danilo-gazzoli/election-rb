@@ -31,7 +31,9 @@ pendências legadas. Essa etapa está validada no PostgreSQL local do WSL.
 
 ## 2. Jornada em navegador na mesma origem
 
-Usar dados fictícios e um ambiente separado do uso escolar. Arquivos do
+Usar o [servidor Rack local](../deployment/feature9/README.md), dados fictícios
+e um ambiente separado do uso escolar. Os oito testes do adaptador foram
+confirmados por Danilo, com zero falhas; a jornada real ainda está pendente. Arquivos do
 frontend devem ser servidos por HTTP(S), com /api/v1 e /cable acessíveis na mesma
 origem. Não abrir o HTML diretamente como arquivo. Um criador provisionado
 configura eleição/partidos/disputa de duas vagas; o mesário opera a liberação.
