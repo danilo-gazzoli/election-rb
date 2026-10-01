@@ -1112,3 +1112,49 @@ credenciais, escolhas de eleitor ou logs de requisições sensíveis.
   Escola e usuários não são recriados; se existir eleição, parar para conferir.
 - Recuperação ainda não executada por Danilo. Nenhuma regra/model/migration
   alterada e nenhum teste, servidor ou operação no banco executado pelo agente.
+
+### Ensaio real — configuração fictícia concluída por Danilo
+
+- Danilo executou a retomada sem erro: health respondeu, contas fictícias
+  tiveram senhas redefinidas, configuração foi criada pela API e papel do
+  mesário associado. O console imprimiu criação concluída e abertura agendada.
+  Fonte: saída do IRB enviada por Danilo nesta conversa.
+- O roteiro alcançou a emissão do código temporário de pareamento; nenhum
+  valor desse código, senha, cookie ou token foi registrado aqui.
+- Pareamento no navegador, abertura efetiva do turno, liberação e votos ainda
+  não foram confirmados. Próximo passo: parear, abrir turno, autenticar mesário
+  no terminal e liberar pela API. Nenhuma regra ou teste alterado pelo agente.
+
+### Teclado do protótipo — alteração cancelada pelo responsável
+
+- Danilo pediu para desfazer a alteração de teclado, pois a interface serviu
+  ao ensaio do sistema. Removidos os oito testes novos e restaurados o harness
+  e o requisito local UI-04 ao estado anterior. Nenhuma implementação do
+  teclado havia sido feita; aplicação e backend permanecem como no ensaio.
+- O ensaio manual informado por Danilo confirma o fluxo que ele executou;
+  não comprova todos os casos de aceite, todos os dispositivos ou produção.
+- Teclado e interface definitiva pertencem ao planejamento futuro do produto.
+  A ERS geral não foi alterada. Nenhum teste, banco, servidor, push ou merge
+  executado pelo agente ao desfazer esses arquivos.
+
+### 01/10/2026 — consolidação para PR em develop
+
+- O responsável autorizou reunir todas as alterações da tarefa 9 na mesma
+  feature branch e atualizar o PR para develop. O PR #31 já existe nessa
+  combinação de branches; reutilizar sua discussão e vínculo com a issue #25.
+- Evidências enviadas pelo responsável: Rails 346 exemplos, zero falhas,
+  32 pendências legadas, inclusive após migrations em banco novo; gateway
+  de mesma origem oito exemplos, zero falhas; frontend 20 testes, zero falhas.
+  A execução Rails combinando os oito exemplos do gateway ainda depende
+  da CI/regressão final. Nenhuma nova suíte foi executada nesta consolidação.
+- O responsável confirmou funcionamento do fluxo que realizou no navegador.
+  Isso complementa a criação da eleição, abertura da página e provisionamento;
+  não comprova cada cenário A-01 a A-12, handshake WebSocket, TLS ou restauração.
+- O frontend permanece temporário para ensaio. A interface definitiva será
+  desenvolvida após o backend/API; compatibilidade futura com Java exige
+  contrato comum de HTTP, autenticação, eventos e testes de conformidade.
+- structure.sql contém somente novos marcadores do pg_dump desde o último
+  commit; removida a linha vazia adicional final, sem mudança de estrutura.
+- Consolidar prévia da eleição, isolamento de sessões do cliente, gateway e
+  roteiros operacionais com os demais incrementos já presentes no PR.
+  Esta etapa publica a entrega para revisão; não executa merge.

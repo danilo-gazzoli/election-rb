@@ -72,3 +72,15 @@ na ERS; o som sintetizado atual não comprova fidelidade sonora a uma urna real.
 Esse roteiro registra critérios de verificação, não uma implantação realizada.
 A tarefa não está liberada para merge enquanto houver falha de seus critérios
 ou risco concreto sem tratamento; o piloto exige evidência do ensaio real.
+
+## Atualização de evidência — 01/10/2026
+
+O responsável concluiu a configuração fictícia e confirmou funcionamento
+do fluxo que executou no navegador. A confirmação é restrita à jornada
+informada: não há registro individual de aprovação de todos os casos
+A-01 a A-12 nem de produção, handshake WebSocket, áudio real ou restauração.
+
+A interface atual será conservada como cliente temporário de teste; o
+frontend definitivo virá após a conclusão do backend/API. O PR da tarefa 9
+consolida o incremento para revisão em develop. Os critérios completos
+de piloto e a regressão combinada permanecem verificações próprias.

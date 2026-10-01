@@ -141,3 +141,26 @@ model ou migration adicional. A superfície do ensaio exclui as rotas legadas.
 Faltam inicialização/jornada no navegador e demais verificações reais descritas
 no roteiro de aceite. O encaminhamento Cable testado por Rack conserva o env;
 não estabelece uma conexão WebSocket real. Nenhum envio remoto ou merge.
+
+## Consolidação da entrega para revisão — 01/10/2026
+
+Esta seção substitui as pendências históricas acima referentes a prévia,
+instalação em banco novo, isolamento do cliente e inicialização do ensaio.
+
+- Prévia implementada pela API e compartilhada com a abertura.
+- Configuração de eleição, agenda, partidos e disputas integrada ao fluxo.
+- Sessões do frontend temporário isoladas; respostas tardias e recibos
+  recuperados cobertos por 20 testes Node informados sem falhas.
+- Cadeia completa de migrations validada pelo responsável em PostgreSQL novo,
+  seguida por 346 exemplos Rails sem falhas e 32 pendências legadas.
+- Gateway de mesma origem validado separadamente com oito exemplos sem falhas.
+  A suíte combinada ainda depende de resultado próprio.
+- Página real e configuração fictícia executadas; responsável confirmou
+  funcionamento da jornada que realizou. O conjunto A-01 a A-12 e as
+  verificações de infraestrutura não foram integralmente confirmados.
+- Frontend definitivo adiado até concluir o backend/API; o protótipo atual
+  permanece para ensaio. Áudio autorizado, dispositivos, HTTPS/WSS,
+  restauração e operação do piloto continuam com aceite específico.
+- A abertura do PR reúne a tarefa 9 e suas bases na branch develop. Não
+  declara encerradas as demais demandas, migração de dados legados ou
+  compatibilidade Java; não altera automaticamente o estado da issue #25.
