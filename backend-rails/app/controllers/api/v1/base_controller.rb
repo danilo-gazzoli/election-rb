@@ -66,6 +66,12 @@ module Api
         false
       end
 
+      def render_configuration_locked(message:)
+        ::Configuration::RecordRejectedChange.call(election: @election, actor: current_user,
+                                                    resource: controller_name, operation: action_name)
+        render_api_error(code: 'configuration_locked', message: message, status: :conflict)
+      end
+
       def render_api_error(code:, message:, status:)
         render json: { error: { code: code, message: message } }, status: status
       end

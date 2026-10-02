@@ -1,4 +1,4 @@
-\restrict qsziHR3yupcQSfHtclsEg9de9vRlfetr3FbNcmAUqMO4ekS8OJ9S7ob66bDZPvx
+\restrict y1ZyLQf9GahyNlcrDp8sTujehxQj4VgfU4Pne8N6NlAiHXfW2dpTbABVpnGAJHs
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -256,6 +256,37 @@ $$;
 
 
 --
+-- Name: protect_federation_configuration(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_federation_configuration() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  owner_ids bigint[];
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    owner_ids := ARRAY[NEW.election_id];
+  ELSIF TG_OP = 'DELETE' THEN
+    owner_ids := ARRAY[OLD.election_id];
+  ELSE
+    owner_ids := ARRAY[OLD.election_id, NEW.election_id];
+  END IF;
+
+  PERFORM 1 FROM rounds WHERE election_id = ANY(owner_ids) ORDER BY id FOR SHARE;
+  IF EXISTS (
+    SELECT 1 FROM rounds WHERE election_id = ANY(owner_ids)
+    AND state IN ('open', 'suspended', 'closed', 'annulled')
+  ) THEN
+    RAISE EXCEPTION 'election federation configuration is immutable';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: protect_owned_party_catalog(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -322,6 +353,35 @@ BEGIN
      OR (OLD.state = 'closed' AND NEW.state <> 'annulled')
      OR (OLD.state IN ('open', 'suspended') AND NEW.state IN ('draft', 'scheduled')) THEN
     RAISE EXCEPTION 'round lifecycle cannot move from % to %', OLD.state, NEW.state;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_candidate_person_positions(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_candidate_person_positions() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  contest_ids bigint[];
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    contest_ids := ARRAY[NEW.contest_id];
+  ELSE
+    contest_ids := ARRAY[OLD.contest_id, NEW.contest_id];
+  END IF;
+  PERFORM 1 FROM contests WHERE id = ANY(contest_ids) ORDER BY id FOR NO KEY UPDATE;
+  IF EXISTS (
+    SELECT 1 FROM candidacies
+    WHERE contest_id = NEW.contest_id AND id IS DISTINCT FROM NEW.id
+    AND (principal_person_id = ANY(ARRAY[NEW.principal_person_id, NEW.vice_person_id])
+         OR vice_person_id = ANY(ARRAY[NEW.principal_person_id, NEW.vice_person_id]))
+  ) THEN
+    RAISE EXCEPTION 'candidate person occupies incompatible positions in this contest';
   END IF;
   RETURN NEW;
 END;
@@ -696,7 +756,8 @@ CREATE TABLE public.candidacies (
     ballot_number character varying NOT NULL,
     state character varying DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT candidacy_people_incompatible CHECK (((vice_person_id IS NULL) OR (principal_person_id <> vice_person_id)))
 );
 
 
@@ -1014,6 +1075,75 @@ CREATE TABLE public.elections_parties (
     election_id bigint NOT NULL,
     party_id bigint NOT NULL
 );
+
+
+--
+-- Name: federation_memberships; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.federation_memberships (
+    id bigint NOT NULL,
+    federation_id bigint NOT NULL,
+    party_id bigint NOT NULL,
+    election_id bigint NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: federation_memberships_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.federation_memberships_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: federation_memberships_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.federation_memberships_id_seq OWNED BY public.federation_memberships.id;
+
+
+--
+-- Name: federations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.federations (
+    id bigint NOT NULL,
+    election_id bigint NOT NULL,
+    name character varying NOT NULL,
+    abbreviation character varying,
+    state character varying DEFAULT 'active'::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT federation_name_present CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT federation_state_valid CHECK (((state)::text = ANY ((ARRAY['active'::character varying, 'inactive'::character varying])::text[])))
+);
+
+
+--
+-- Name: federations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.federations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: federations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.federations_id_seq OWNED BY public.federations.id;
 
 
 --
@@ -1586,6 +1716,20 @@ ALTER TABLE ONLY public.elections ALTER COLUMN id SET DEFAULT nextval('public.el
 
 
 --
+-- Name: federation_memberships id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federation_memberships ALTER COLUMN id SET DEFAULT nextval('public.federation_memberships_id_seq'::regclass);
+
+
+--
+-- Name: federations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federations ALTER COLUMN id SET DEFAULT nextval('public.federations_id_seq'::regclass);
+
+
+--
 -- Name: incidents id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1805,6 +1949,22 @@ ALTER TABLE ONLY public.elections
 
 
 --
+-- Name: federation_memberships federation_memberships_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federation_memberships
+    ADD CONSTRAINT federation_memberships_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: federations federations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federations
+    ADD CONSTRAINT federations_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: incidents incidents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1957,6 +2117,20 @@ CREATE UNIQUE INDEX idx_election_party ON public.election_party_registrations US
 --
 
 CREATE UNIQUE INDEX idx_election_party_number ON public.election_party_registrations USING btree (election_id, ballot_number);
+
+
+--
+-- Name: idx_federation_election_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_federation_election_identity ON public.federations USING btree (id, election_id);
+
+
+--
+-- Name: idx_federation_party_per_election; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_federation_party_per_election ON public.federation_memberships USING btree (election_id, party_id);
 
 
 --
@@ -2261,6 +2435,34 @@ CREATE INDEX index_elections_on_school_installation_id ON public.elections USING
 
 
 --
+-- Name: index_federation_memberships_on_election_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_federation_memberships_on_election_id ON public.federation_memberships USING btree (election_id);
+
+
+--
+-- Name: index_federation_memberships_on_federation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_federation_memberships_on_federation_id ON public.federation_memberships USING btree (federation_id);
+
+
+--
+-- Name: index_federation_memberships_on_party_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_federation_memberships_on_party_id ON public.federation_memberships USING btree (party_id);
+
+
+--
+-- Name: index_federations_on_election_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_federations_on_election_id ON public.federations USING btree (election_id);
+
+
+--
 -- Name: index_incidents_on_round_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2478,6 +2680,13 @@ CREATE TRIGGER candidacy_insert_frozen BEFORE INSERT ON public.candidacies FOR E
 
 
 --
+-- Name: candidacies candidacy_person_positions_valid; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER candidacy_person_positions_valid BEFORE INSERT OR UPDATE OF contest_id, principal_person_id, vice_person_id ON public.candidacies FOR EACH ROW EXECUTE FUNCTION public.validate_candidate_person_positions();
+
+
+--
 -- Name: candidate_people candidate_person_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2531,6 +2740,20 @@ CREATE TRIGGER contest_catalog_immutable BEFORE DELETE OR UPDATE ON public.conte
 --
 
 CREATE TRIGGER election_configuration_protected BEFORE DELETE OR UPDATE OF title, description, timezone, start_time, end_time, election_day, configuration_version, school_installation_id, creator_id ON public.elections FOR EACH ROW EXECUTE FUNCTION public.protect_election_configuration();
+
+
+--
+-- Name: federations federation_configuration_protected; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER federation_configuration_protected BEFORE INSERT OR DELETE OR UPDATE ON public.federations FOR EACH ROW EXECUTE FUNCTION public.protect_federation_configuration();
+
+
+--
+-- Name: federation_memberships federation_membership_configuration_protected; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER federation_membership_configuration_protected BEFORE INSERT OR DELETE OR UPDATE ON public.federation_memberships FOR EACH ROW EXECUTE FUNCTION public.protect_federation_configuration();
 
 
 --
@@ -2664,6 +2887,22 @@ CREATE TRIGGER voting_stage_insert_frozen BEFORE INSERT ON public.voting_stages 
 --
 
 CREATE TRIGGER voting_stage_reference_valid BEFORE INSERT OR UPDATE ON public.voting_stages FOR EACH ROW EXECUTE FUNCTION public.validate_voting_catalog_link();
+
+
+--
+-- Name: federation_memberships fk_membership_federation_election; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federation_memberships
+    ADD CONSTRAINT fk_membership_federation_election FOREIGN KEY (federation_id, election_id) REFERENCES public.federations(id, election_id);
+
+
+--
+-- Name: federation_memberships fk_membership_registered_party; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federation_memberships
+    ADD CONSTRAINT fk_membership_registered_party FOREIGN KEY (election_id, party_id) REFERENCES public.election_party_registrations(election_id, party_id);
 
 
 --
@@ -2832,6 +3071,14 @@ ALTER TABLE ONLY public.confirmation_receipts
 
 ALTER TABLE ONLY public.candidacies
     ADD CONSTRAINT fk_rails_702bf420a8 FOREIGN KEY (vice_person_id) REFERENCES public.candidate_people(id);
+
+
+--
+-- Name: federations fk_rails_7258f503eb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federations
+    ADD CONSTRAINT fk_rails_7258f503eb FOREIGN KEY (election_id) REFERENCES public.elections(id);
 
 
 --
@@ -3043,6 +3290,14 @@ ALTER TABLE ONLY public.rounds
 
 
 --
+-- Name: federation_memberships fk_rails_f890397ee9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.federation_memberships
+    ADD CONSTRAINT fk_rails_f890397ee9 FOREIGN KEY (election_id) REFERENCES public.elections(id);
+
+
+--
 -- Name: election_party_registrations fk_rails_f8d1e571d3; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3062,11 +3317,14 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict qsziHR3yupcQSfHtclsEg9de9vRlfetr3FbNcmAUqMO4ekS8OJ9S7ob66bDZPvx
+\unrestrict y1ZyLQf9GahyNlcrDp8sTujehxQj4VgfU4Pne8N6NlAiHXfW2dpTbABVpnGAJHs
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261002020000'),
+('20261002010000'),
+('20261001050000'),
 ('20261001040000'),
 ('20261001030000'),
 ('20261001020000'),

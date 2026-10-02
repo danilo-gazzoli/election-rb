@@ -3,6 +3,8 @@
 module Voting
   # One read-only ballot definition shared by preview and round opening.
   class BallotConfiguration
+    IMPLEMENTED_METHODS = %w[simple_majority].freeze
+
     def self.call(round:)
       new(round: round).call
     end
@@ -13,9 +15,11 @@ module Voting
     end
 
     def call
+      validate_timezone
       contests = @round.election.contests.order(:position).to_a
       issue('missing_contests', 'at least one contest is required') if contests.empty?
       contests.each { |contest| validate_contest(contest) }
+      validate_federations
       stages = stage_plan(contests)
       {
         valid: @issues.empty?, issues: @issues,
@@ -31,7 +35,37 @@ module Voting
       @issues << { code: code, message: message }.merge(identity)
     end
 
+    def effective_timezone
+      @round.election.timezone.presence || @round.election.school_installation.timezone
+    end
+
+    def validate_timezone
+      timezone = effective_timezone
+      return if timezone.is_a?(String) && ActiveSupport::TimeZone[timezone]
+
+      issue('invalid_timezone', 'valid voting timezone is required')
+    end
+
+    def federations
+      @federations ||= @round.election.federations.includes(:federation_memberships).order(:id).to_a
+    end
+
+    def validate_federations
+      federations.each do |federation|
+        next unless federation.state == 'active' && federation.federation_memberships.size < 2
+
+        issue('invalid_federation', "active federation #{federation.name} requires at least two parties",
+              federation_id: federation.id)
+      end
+    end
+
     def validate_contest(contest)
+      if contest.rule_version.blank?
+        issue('invalid_rule_version', "rule version is required for #{contest.name}", contest_id: contest.id)
+      end
+      unless IMPLEMENTED_METHODS.include?(contest.method)
+        issue('unavailable_method', "tally method #{contest.method} is not available", contest_id: contest.id)
+      end
       profile = ContestProfile.new(method: contest.method, seats: contest.seats,
                                    choices_per_person: contest.choices_per_person,
                                    has_vice: contest.has_vice)
@@ -72,7 +106,7 @@ module Voting
           'opens_at' => @round.opens_at.utc.iso8601(6),
           'closes_at' => @round.closes_at.utc.iso8601(6),
           'grace_until' => @round.grace_until.utc.iso8601(6),
-          'timezone' => @round.election.timezone.presence || @round.election.school_installation.timezone
+          'timezone' => effective_timezone
         },
         'parties' => ElectionPartyRegistration.includes(:party)
                                               .where(election_id: @round.election_id)
@@ -83,6 +117,13 @@ module Voting
             'number' => registration.ballot_number,
             'name' => registration.party.name,
             'abbreviation' => registration.party.abbreviation
+          }
+        end,
+        'federations' => federations.map do |federation|
+          {
+            'id' => federation.id, 'name' => federation.name, 'abbreviation' => federation.abbreviation,
+            'state' => federation.state,
+            'party_ids' => federation.federation_memberships.map(&:party_id).sort
           }
         end,
         'contests' => contests.map do |contest|

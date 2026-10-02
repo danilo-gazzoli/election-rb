@@ -11,7 +11,7 @@ module Api
           render_api_error(code: 'forbidden', message: error.message, status: :forbidden)
         end
         rescue_from ::Configuration::ManageElection::Locked do |error|
-          render_api_error(code: 'configuration_locked', message: error.message, status: :conflict)
+          render_configuration_locked(message: error.message)
         end
         rescue_from ::Configuration::ManageElection::Stale do |error|
           render_api_error(code: 'stale_configuration', message: error.message, status: :conflict)
