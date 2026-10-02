@@ -20,8 +20,10 @@ module Configuration
         attributes.fetch(:candidacies, []).each do |entry|
           entry = entry.symbolize_keys
           person = CandidatePerson.create!(name: entry[:principal_name])
+          vice = entry[:vice_name].present? ? CandidatePerson.create!(name: entry[:vice_name]) : nil
           contest.candidacies.create!(principal_person: person,
                                       principal_party_id: entry[:principal_party_id],
+                                      vice_person: vice, vice_party_id: entry[:vice_party_id],
                                       ballot_number: entry[:ballot_number])
         end
         election.update_columns(configuration_version: election.configuration_version + 1, updated_at: Time.current)

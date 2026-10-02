@@ -265,6 +265,152 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/elections/{election_id}/federations:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      operationId: listElectionFederations
+      summary: List election federations
+      description: >-
+        Requires an active creator role in this election and the same school. Read only; ordered by federation ID with sorted party IDs. No CSRF header is required for this read.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: List election federations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElectionFederation
+      summary: Create a federation and its members atomically
+      description: >-
+        Requires a creator session and CSRF header. Name is required; state defaults to active. Active federations require at least two distinct registered parties. Each party can belong to only one federation in this election. Inactive federations may have fewer members. Metadata, membership, configuration version and audit are committed together. Protected identifiers are ignored. Returns 422 invalid_configuration for invalid membership and 409 configuration_locked after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Create a federation and its members atomically
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        '400':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/federations/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    patch:
+      operationId: updateElectionFederation
+      summary: Edit draft federation metadata and composition
+      description: >-
+        Requires a creator session and CSRF header. Accepts partial metadata; omitted party_ids preserve current membership, while provided party_ids replace it atomically. Active federations require at least two distinct registered parties, exclusive within this election. Metadata, membership, version and audit share one transaction. Protected identifiers are ignored. Returns 422 invalid_configuration for invalid composition and 409 configuration_locked after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit draft federation metadata and composition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        '400':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+    delete:
+      operationId: deleteElectionFederation
+      summary: Delete a draft federation while preserving parties
+      description: >-
+        Requires a creator session and CSRF header. Removes this federation and its memberships, preserving parties and candidacies. Deletion, configuration version and attributable audit are atomic. Returns 409 configuration_locked after any round opens, or federation_in_use for protected references.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Delete a draft federation while preserving parties
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/admin/elections/{election_id}/contests:
     parameters:
       - name: election_id
@@ -272,6 +418,25 @@ paths:
         required: true
         schema:
           type: integer
+    get:
+      operationId: listContests
+      summary: List ordered contests and candidacies
+      description: Requires an active creator role in this election and the same school. Read only; ordered by configured position. Reads do not require a CSRF header.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: List ordered contests and candidacies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
     post:
       operationId: createContest
       summary: Create a draft contest and affiliated candidacies atomically
@@ -314,6 +479,220 @@ paths:
           $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/contests/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getContest
+      summary: Read a contest and its candidature identities
+      description: Requires an active creator role in this election and the same school. Read only; ordered by configured position. Reads do not require a CSRF header.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Read a contest and its candidature identities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+    patch:
+      operationId: updateContest
+      summary: Edit a draft contest
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContestUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit a draft contest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+    delete:
+      operationId: deleteContest
+      summary: Remove an empty draft contest
+      description: Requires creator and CSRF. Configuration is locked after opening. contest_in_use returns 409 when candidacies or election data reference the contest; no implicit cascade. Deletion, version and audit commit atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Remove an empty draft contest
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/contests/{contest_id}/candidacies:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: contest_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createCandidacy
+      summary: Create an affiliated candidacy or slate
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored. Principal and vice parties must be registered in this election. A slate requires vice_name and vice_party_id when the contest has_vice is true; parties may differ. Number is unique within the contest.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidacyCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Create an affiliated candidacy or slate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidacyWriteResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/contests/{contest_id}/candidacies/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: contest_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateCandidacy
+      summary: Edit an affiliated candidacy or slate
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored. Omitted fields are preserved. Cannot clear a required vice or provide vice_name without an existing vice. candidate_person_in_use returns 409 when renaming a person referenced by another candidacy. Person identifiers remain unchanged.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidacyUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit an affiliated candidacy or slate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidacyWriteResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+    delete:
+      operationId: deleteCandidacy
+      summary: Remove an unused draft candidacy
+      description: Requires creator and CSRF. Configuration is locked after opening. Deletes people only when no other candidacy references them as principal or vice; preserves the contest and parties. candidacy_in_use returns 409 for protected references. Deletion, version and audit commit atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Remove an unused draft candidacy
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
   /api/v1/admin/elections:
     get:
@@ -459,6 +838,7 @@ paths:
     post:
       operationId: openRound
       summary: Freeze a valid round configuration and open consecutive voting stages
+      description: Only simple_majority is currently available for voting. Draft absolute_majority and proportional contests are permitted, but preview returns unavailable_method and opening rejects them until their tally features are implemented.
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       x-rate-limits:
@@ -1201,6 +1581,192 @@ components:
         password:
           type: string
           format: password
+    ContestUpdateRequest:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          type: object
+          description: Partial update; omitted fields are preserved and protected fields are ignored.
+          properties:
+            name: {type: string}
+            position: {type: integer, minimum: 1}
+            method: {type: string, enum: [simple_majority, absolute_majority, proportional]}
+            seats: {type: integer, minimum: 1}
+            choices_per_person: {type: integer, minimum: 1}
+            has_vice: {type: boolean}
+    CandidacyCreateRequest:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          type: object
+          required: [principal_name, principal_party_id, ballot_number]
+          description: A contest with vice requires vice_name and vice_party_id; both parties must be registered in this election.
+          properties:
+            principal_name: {type: string}
+            principal_party_id: {type: integer}
+            ballot_number: {type: string}
+            vice_name: {type: string}
+            vice_party_id: {type: integer}
+    CandidacyUpdateRequest:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          type: object
+          description: Partial update preserving person IDs. Protected fields are ignored; invalid affiliations or removal of a required vice return 422.
+          properties:
+            principal_name: {type: string}
+            principal_party_id: {type: integer}
+            ballot_number: {type: string}
+            vice_name: {type: string}
+            vice_party_id: {type: integer, nullable: true}
+    AdministrationPerson:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    CandidacyIdentity:
+      type: object
+      required: [id, ballot_number, state, principal_person_id, principal_party_id, vice_person_id, vice_party_id]
+      properties:
+        id: {type: integer}
+        ballot_number: {type: string}
+        state: {type: string, enum: [active, withdrawn]}
+        principal_person_id: {type: integer}
+        principal_party_id: {type: integer}
+        vice_person_id: {type: integer, nullable: true}
+        vice_party_id: {type: integer, nullable: true}
+    CandidacyWriteResult:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          $ref: '#/components/schemas/CandidacyIdentity'
+    CatalogCandidacy:
+      type: object
+      required: [id, ballot_number, state, principal_party_id, vice_party_id, principal_person, vice_person]
+      properties:
+        id: {type: integer}
+        ballot_number: {type: string}
+        state: {type: string, enum: [active, withdrawn]}
+        principal_party_id: {type: integer}
+        vice_party_id: {type: integer, nullable: true}
+        principal_person:
+          $ref: '#/components/schemas/AdministrationPerson'
+        vice_person:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: {type: integer}
+            name: {type: string}
+    CatalogContest:
+      type: object
+      required: [id, name, position, method, seats, choices_per_person, has_vice, rule_version, candidacies]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        position: {type: integer, minimum: 1}
+        method: {type: string, enum: [simple_majority, absolute_majority, proportional]}
+        seats: {type: integer, minimum: 1}
+        choices_per_person: {type: integer, minimum: 1}
+        has_vice: {type: boolean}
+        rule_version: {type: string}
+        candidacies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogCandidacy'
+    ContestResult:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          $ref: '#/components/schemas/CatalogContest'
+    ContestCatalog:
+      type: object
+      required: [contests]
+      properties:
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogContest'
+    FederationCreateRequest:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+              minLength: 1
+            abbreviation:
+              type: string
+              nullable: true
+            state:
+              type: string
+              enum: [active, inactive]
+            party_ids:
+              type: array
+              uniqueItems: true
+              description: Registered party IDs in this election; active federations require at least two. Omission on update preserves existing membership.
+              items: {type: integer, minimum: 1}
+    FederationUpdateRequest:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          type: object
+          properties:
+            name:
+              type: string
+              minLength: 1
+            abbreviation:
+              type: string
+              nullable: true
+            state:
+              type: string
+              enum: [active, inactive]
+            party_ids:
+              type: array
+              uniqueItems: true
+              description: Registered party IDs in this election; active federations require at least two. Omission on update preserves existing membership.
+              items: {type: integer, minimum: 1}
+    Federation:
+      type: object
+      required: [id, name, abbreviation, state, party_ids]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        abbreviation:
+          type: string
+          nullable: true
+        state:
+          type: string
+          enum: [active, inactive]
+        party_ids:
+          type: array
+          uniqueItems: true
+          description: Party IDs sorted in ascending order; candidate affiliation remains with the party.
+          items: {type: integer, minimum: 1}
+    FederationResult:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          $ref: '#/components/schemas/Federation'
+    FederationCatalog:
+      type: object
+      required: [federations]
+      properties:
+        federations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Federation'
     ContestConfigurationRequest:
       type: object
       required: [contest]
@@ -1225,7 +1791,7 @@ components:
               minimum: 1
             has_vice:
               type: boolean
-              description: This creation operation supports candidacies without a vice.
+              description: When true, each nested candidacy requires vice_name and vice_party_id; both parties must be registered in this election.
             candidacies:
               type: array
               items:
@@ -1238,6 +1804,10 @@ components:
                     type: integer
                   ballot_number:
                     type: string
+                  vice_name:
+                    type: string
+                  vice_party_id:
+                    type: integer
     ElectionAttributes:
       type: object
       properties:
@@ -1340,7 +1910,7 @@ components:
             properties:
               code:
                 type: string
-                enum: [missing_round, missing_contests, unsupported_profile, insufficient_candidacies, invalid_candidacy, ambiguous_ballot_number, invalid_stage_order]
+                enum: [missing_round, missing_contests, invalid_timezone, invalid_rule_version, unsupported_profile, unavailable_method, invalid_federation, insufficient_candidacies, invalid_candidacy, ambiguous_ballot_number, invalid_stage_order]
               message:
                 type: string
               contest_id:
@@ -1350,7 +1920,7 @@ components:
         ballot:
           type: object
           nullable: true
-          description: Canonical ballot used by opening, or null for an invalid configuration. Contains round_number, rule_version, schedule, parties and ordered contests with candidate identities and affiliations. Contains no votes or voting sessions.
+          description: Canonical ballot used by opening, or null for an invalid configuration. Contains round_number, rule_version, schedule, parties, federations and ordered contests with candidate identities and affiliations. Federations contain id, name, optional abbreviation, state and sorted party_ids; active federations require at least two parties. Contains no votes or voting sessions.
         stages:
           type: array
           items:

@@ -8,7 +8,7 @@ module Api
         before_action :authorize_election!
 
         rescue_from ::Configuration::ManageParty::Locked do |error|
-          render_api_error(code: 'configuration_locked', message: error.message, status: :conflict)
+          render_configuration_locked(message: error.message)
         end
         rescue_from ::Configuration::ManageParty::NotAllowed do |error|
           render_api_error(code: 'forbidden', message: error.message, status: :forbidden)

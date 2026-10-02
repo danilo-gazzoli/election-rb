@@ -5,6 +5,7 @@ class Election < ApplicationRecord
   belongs_to :creator, class_name: 'User', optional: true
   has_many :rounds, dependent: :restrict_with_exception
   has_many :contests, dependent: :restrict_with_exception
+  has_many :federations, dependent: :restrict_with_exception
   has_and_belongs_to_many :parties
   has_and_belongs_to_many :offices
   has_many :candidates
