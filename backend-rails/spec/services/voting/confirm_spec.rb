@@ -119,6 +119,8 @@ RSpec.describe Voting::Confirm do
     confirm(first_stage, first_candidate, 'cmd-1')
     expect(ActionCable.server).to receive(:broadcast)
       .with("voting_device:#{device.id}", { event: 'state_changed' }).once
+    expect(ActionCable.server).to receive(:broadcast)
+      .with("pollworker:election:#{round.election_id}", { event: 'state_changed' }).once
     expect(confirm(second_stage, first_candidate, 'cmd-2').status).to eq(:warning_required)
     confirm(second_stage, first_candidate, 'cmd-2', acknowledged: true)
   end
@@ -213,6 +215,8 @@ RSpec.describe Voting::Confirm do
     confirm(first_stage, first_candidate, 'cmd-1')
     expect(ActionCable.server).to receive(:broadcast)
       .with("voting_device:#{device.id}", { event: 'state_changed' }).once
+    expect(ActionCable.server).to receive(:broadcast)
+      .with("pollworker:election:#{round.election_id}", { event: 'state_changed' }).once
 
     Voting::Abandon.call(session: session, actor: pollworker, reason: 'Person left before finishing')
   end

@@ -124,6 +124,8 @@ RSpec.describe 'API v1 election preview', type: :request do
     result = response.parsed_body
 
     travel_to(round.opens_at + 1.minute) do
+      login(creator)
+      expect(response).to have_http_status(:ok)
       post "/api/v1/admin/rounds/#{round.id}/open", as: :json
       expect(response).to have_http_status(:ok)
     end

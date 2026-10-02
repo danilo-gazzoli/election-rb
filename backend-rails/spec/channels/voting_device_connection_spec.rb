@@ -20,4 +20,17 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
     cookies.encrypted[:voting_device] = "#{device.id}:incorrect"
     expect { connect }.to have_rejected_connection
   end
+
+  it 'recognizes that the connected credential is still current' do
+    cookies.encrypted[:voting_device] = "#{device.id}:#{credential}"
+    connect
+    expect(connection.device_credential_current?).to be(true)
+  end
+
+  it 'recognizes revocation even when the connected device object is stale' do
+    cookies.encrypted[:voting_device] = "#{device.id}:#{credential}"
+    connect
+    VotingDevice.find(device.id).update!(credential_digest: VotingDevice.digest_credential('replacement-secret'))
+    expect(connection.device_credential_current?).to be(false)
+  end
 end
