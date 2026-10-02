@@ -1,4 +1,4 @@
-\restrict Nl0akNmvPi24CPQLihmX5tD8I1ohbQkB2lHwJccl551VM4LLgvhDEzCgyAe3UOi
+\restrict qsziHR3yupcQSfHtclsEg9de9vRlfetr3FbNcmAUqMO4ekS8OJ9S7ob66bDZPvx
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -632,6 +632,19 @@ CREATE SEQUENCE public.audit_events_id_seq
 --
 
 ALTER SEQUENCE public.audit_events_id_seq OWNED BY public.audit_events.id;
+
+
+--
+-- Name: authentication_attempt_windows; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.authentication_attempt_windows (
+    key_digest character varying(64) NOT NULL,
+    window_started_at bigint NOT NULL,
+    expires_at timestamp(6) without time zone NOT NULL,
+    attempts bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT positive_authentication_attempts CHECK ((attempts > 0))
+);
 
 
 --
@@ -1919,6 +1932,13 @@ CREATE UNIQUE INDEX idx_active_session_per_device ON public.voting_sessions USIN
 
 
 --
+-- Name: idx_authentication_attempt_window; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_authentication_attempt_window ON public.authentication_attempt_windows USING btree (key_digest, window_started_at);
+
+
+--
 -- Name: idx_cast_votes_count; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2021,6 +2041,13 @@ CREATE INDEX index_audit_events_on_election_id ON public.audit_events USING btre
 --
 
 CREATE INDEX index_audit_events_on_user_id ON public.audit_events USING btree (user_id);
+
+
+--
+-- Name: index_authentication_attempt_windows_on_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_authentication_attempt_windows_on_expires_at ON public.authentication_attempt_windows USING btree (expires_at);
 
 
 --
@@ -3035,11 +3062,12 @@ ALTER TABLE ONLY public.parties
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Nl0akNmvPi24CPQLihmX5tD8I1ohbQkB2lHwJccl551VM4LLgvhDEzCgyAe3UOi
+\unrestrict qsziHR3yupcQSfHtclsEg9de9vRlfetr3FbNcmAUqMO4ekS8OJ9S7ob66bDZPvx
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261001040000'),
 ('20261001030000'),
 ('20261001020000'),
 ('20261001010000'),

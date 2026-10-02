@@ -19,6 +19,40 @@ module Api
           )
           render json: { id: device.id, public_label: device.public_label, pairing_code: code }, status: :created
         end
+
+        def revoke
+          manage_access(:revoke)
+        end
+
+        def renew_pairing_code
+          manage_access(:renew)
+        end
+
+        private
+
+        def manage_access(operation)
+          election = Election.find(params[:election_id])
+          return unless require_role!(election, 'creator')
+
+          device = VotingDevice.find(params[:id])
+          result = ::Authentication::ManageDeviceAccess.call(
+            election: election, device: device, actor: current_user, operation: operation, reason: params[:reason]
+          )
+          payload = { id: device.id, state: device.state }
+          if result.pairing_code
+            payload.merge!(pairing_code: result.pairing_code,
+                           pairing_expires_at: device.pairing_expires_at.utc.iso8601(6))
+          end
+          render json: payload
+        rescue ActiveRecord::RecordNotFound
+          render_api_error(code: 'not_found', message: 'Election or device not found', status: :not_found)
+        rescue ::Authentication::ManageDeviceAccess::NotAllowed => error
+          render_api_error(code: 'forbidden', message: error.message, status: :forbidden)
+        rescue ::Authentication::ManageDeviceAccess::Busy => error
+          render_api_error(code: 'device_busy', message: error.message, status: :conflict)
+        rescue ::Authentication::ManageDeviceAccess::InvalidReason => error
+          render_api_error(code: 'invalid_reason', message: error.message, status: :unprocessable_entity)
+        end
       end
     end
   end

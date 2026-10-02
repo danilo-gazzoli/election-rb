@@ -8,6 +8,56 @@ info:
     the corresponding feature is implemented and covered by request tests.
 servers:
   - url: /
+x-user-session:
+  absolute_timeout_seconds: 28800
+  renew_on_activity: false
+  cookie:
+    http_only: true
+    same_site: Lax
+    secure_in_production: true
+  description: >-
+    Opaque session cookie; obtain the CSRF token through GET /api/v1/auth/session
+    and send X-CSRF-Token with every mutation. Login resets the session and token.
+    The eight-hour deadline belongs to the operator, not the anonymous voter.
+    Logout clears the current browser session; it does not revoke every copied
+    cookie or disconnect all previously opened operator sockets.
+x-rate-limit-policy:
+  algorithm: fixed-window
+  storage: postgresql
+  description: >-
+    Counts attempts before executing a command, including unsuccessful attempts.
+    Identities are stored as keyed digests. Reads are not counted. Authenticated
+    operator and device quotas are independent of IP quotas. Retry the same
+    confirmation command_key after Retry-After; never invent another vote.
+x-websocket-channels:
+  VotingDeviceChannel:
+    authentication: voting-device-credential
+    scope: device
+    message_schema: '#/components/schemas/OperationalStateChanged'
+    description: >-
+      Uses the paired cookie. The credential is checked on subscription and before
+      transmission. Rotation attempts to disconnect existing device connections;
+      if that transport fails, subsequent transmissions still recheck the digest.
+  PollworkerChannel:
+    authentication: user-session
+    roles: [creator, pollworker]
+    scope: election
+    subscription_parameters: [election_id]
+    message_schema: '#/components/schemas/OperationalStateChanged'
+    description: >-
+      Requires the same school and an active election role. Session deadline,
+      active account and role are checked on subscription and before transmission.
+      Notifications request an authorized HTTP refresh; they contain no choices
+      or session identifiers. Device cookies take priority when both identities
+      are present; use separate browser contexts for operator and voting device.
+  transport:
+    protocol: action-cable
+    path: /cable
+    origin: same-origin
+    description: >-
+      An adapter must implement the Action Cable subscription envelope. Foreign
+      or missing Origin is rejected. Separate frontend source/deployment must
+      expose API and WebSocket through the same origin with credentialed cookies.
 paths:
   /api/v1/health:
     get:
@@ -51,6 +101,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+      x-rate-limits:
+        - {scope: login_account, identity: account, attempts: 10, window_seconds: 900}
+        - {scope: login_ip, identity: ip, attempts: 30, window_seconds: 900}
       responses:
         '200':
           description: Authenticated session
@@ -58,6 +111,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -70,6 +129,8 @@ paths:
       responses:
         '204':
           description: Session ended
+        '403':
+          $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -115,6 +176,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PartyCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '201':
           description: Party and registration persisted with an audit event
@@ -126,6 +189,12 @@ paths:
                 properties:
                   id:
                     type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -156,6 +225,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PartyUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Updated party
@@ -163,6 +234,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Party'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
     delete:
@@ -174,9 +251,17 @@ paths:
         deletion; a failure rolls back the complete command.
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '204':
           description: Party and registration deleted with an audit event
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -202,6 +287,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ContestConfigurationRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '201':
           description: Contest and candidacies persisted with an audit event
@@ -221,6 +308,10 @@ paths:
           $ref: '#/components/responses/ApiError'
         '422':
           $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -261,6 +352,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ElectionCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '201':
           description: Draft election configuration
@@ -268,6 +361,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Election'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -309,6 +408,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ElectionUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Updated election with its new configuration version
@@ -316,6 +417,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Election'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -328,6 +435,8 @@ paths:
       description: Read-only configuration check, including future schedules. Opening still enforces its time window. Invalid ballots return all identified issues and empty stages, without a snapshot or state change.
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Ordered stages and configuration problems
@@ -335,6 +444,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ElectionPreview'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -346,6 +461,8 @@ paths:
       summary: Freeze a valid round configuration and open consecutive voting stages
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Opened round state, snapshot digest and ordered stages
@@ -353,6 +470,12 @@ paths:
             application/json:
               schema:
                 type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -374,6 +497,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Suspended round
@@ -399,6 +524,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
   /api/v1/admin/rounds/{id}/resume:
     parameters:
@@ -420,6 +549,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Resumed round
@@ -445,6 +576,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
   /api/v1/admin/rounds/{id}/annul:
     parameters:
@@ -468,6 +603,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoundAnnulmentRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Annulled round; no winner is declared
@@ -493,6 +630,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
   /api/v1/admin/rounds/{id}/close:
     parameters:
@@ -502,6 +643,8 @@ paths:
       summary: Close after the grace period and persist reconciled tallies
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Closed round and final or pending tally states
@@ -509,6 +652,12 @@ paths:
             application/json:
               schema:
                 type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -520,6 +669,8 @@ paths:
       summary: Release one anonymous voting session after physical identity check
       x-implementation-status: implemented
       x-authentication: poll-worker-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Current operational session state
@@ -527,6 +678,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VotingDeviceSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -558,6 +715,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
       responses:
         '200':
           description: Original or newly committed session closure
@@ -583,6 +742,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
   /api/v1/voting-device/state:
     get:
@@ -617,6 +780,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ConfirmationIntent'
+      x-rate-limits:
+        - {scope: device_confirmations, identity: device, attempts: 120, window_seconds: 60}
       responses:
         '200':
           description: Durable confirmation or idempotent replay
@@ -624,6 +789,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfirmationReceipt'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -642,6 +813,205 @@ paths:
                 type: object
         default:
           $ref: '#/components/responses/ApiError'
+
+  /api/v1/voting-device/pair:
+    post:
+      operationId: pairVotingDevice
+      summary: Consume a one-time code and rotate the opaque device cookie
+      description: >-
+        Codes expire after ten minutes and can be consumed once. Invalid or expired
+        codes return 401 invalid_pairing. A successful pair invalidates the old
+        credential and restores an unavailable device to locked. Credentials are
+        never returned in JSON. Obtain CSRF through the user session endpoint.
+      x-implementation-status: implemented
+      x-authentication: anonymous-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairing_code]
+              properties:
+                pairing_code:
+                  type: string
+      x-rate-limits:
+        - {scope: pair_ip, identity: ip, attempts: 20, window_seconds: 600}
+      responses:
+        '200':
+          description: Device paired; an encrypted HttpOnly cookie is issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state]
+                properties:
+                  state:
+                    type: string
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/voting-devices:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createVotingDevice
+      summary: Register a school device and issue its first one-time pairing code
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_label]
+              properties:
+                public_label:
+                  type: string
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Device created; pairing code is valid for ten minutes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, public_label, pairing_code]
+                properties:
+                  id:
+                    type: integer
+                  public_label:
+                    type: string
+                  pairing_code:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/voting-devices/{id}/revoke:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: revokeVotingDeviceAccess
+      summary: Revoke a school device credential with an audited reason
+      description: >-
+        Requires an active creator role in the election and a device from the
+        same school. Invalidates its credential and pending pairing code, marks
+        it unavailable and records the reason atomically. Refuses active voting
+        sessions. A transport failure cannot undo the committed revocation.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Credential revoked; no secrets are returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAccessResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: device_busy; an active voting session must finish first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/voting-devices/{id}/pairing-code:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: renewVotingDevicePairingCode
+      summary: Issue a new one-time code for an existing school device
+      description: >-
+        Requires an active creator role and a device from the same school, without
+        an active voting session. Invalidates the old credential and pending code,
+        marks unavailable and audits renewal without storing the plaintext code.
+        The new code expires in ten minutes. A successful pair restores locked.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Pairing code returned once to the authorized creator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePairingCodeResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: device_busy; an active voting session must finish first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
 
 components:
   parameters:
@@ -665,7 +1035,74 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: invalid_csrf_token or forbidden; command is not executed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: rate_limited; attempt quota exceeded before command execution
+      headers:
+        Retry-After:
+          description: Seconds until the fixed window resets
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AuthenticationUnavailable:
+      description: >-
+        authentication_unavailable; the attempt limiter cannot access its storage.
+        The command is not executed. This response does not describe every possible
+        database outage elsewhere in the application.
+      headers:
+        Retry-After:
+          description: Suggested seconds before retrying
+          schema:
+            type: integer
+            minimum: 1
+            example: 5
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
   schemas:
+    OperationalStateChanged:
+      type: object
+      additionalProperties: false
+      required: [event]
+      properties:
+        event:
+          type: string
+          enum: [state_changed]
+    DeviceAccessResult:
+      type: object
+      required: [id, state]
+      properties:
+        id:
+          type: integer
+        state:
+          type: string
+          enum: [unavailable]
+    DevicePairingCodeResult:
+      type: object
+      required: [id, state, pairing_code, pairing_expires_at]
+      properties:
+        id:
+          type: integer
+        state:
+          type: string
+          enum: [unavailable]
+        pairing_code:
+          type: string
+          description: One-time secret; never log or persist on the client
+        pairing_expires_at:
+          type: string
+          format: date-time
+          description: UTC expiry of the ten-minute pairing window
     PartyAttributes:
       type: object
       properties:

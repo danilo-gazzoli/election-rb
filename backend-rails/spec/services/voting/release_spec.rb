@@ -39,6 +39,8 @@ RSpec.describe Voting::Release do
   it 'notifies the released device without sending a choice or session identifier' do
     expect(ActionCable.server).to receive(:broadcast)
       .with("voting_device:#{device.id}", { event: 'state_changed' }).once
+    expect(ActionCable.server).to receive(:broadcast)
+      .with("pollworker:election:#{round.election_id}", { event: 'state_changed' }).once
 
     described_class.call(round: round, device: device, actor: actor)
   end

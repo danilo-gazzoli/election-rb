@@ -188,6 +188,8 @@ RSpec.describe 'Voting::AnnulRound' do
     voting_session
     expect(ActionCable.server).to receive(:broadcast)
       .with("voting_device:#{device.id}", { event: 'state_changed' }).once
+    expect(ActionCable.server).to receive(:broadcast)
+      .with("pollworker:election:#{round.election_id}", { event: 'state_changed' }).once
     annul
   end
 

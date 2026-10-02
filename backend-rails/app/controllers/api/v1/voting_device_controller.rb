@@ -4,6 +4,8 @@ module Api
   module V1
     class VotingDeviceController < BaseController
       def pair
+        return unless allow_attempt!(scope: 'pair_ip', identity: request.remote_ip, limit: 20, period: 600)
+
         code = params[:pairing_code]
         return invalid_pairing unless code.is_a?(String) && code.present?
 
@@ -15,10 +17,12 @@ module Api
           return invalid_pairing unless device.pairing_code_digest && device.pairing_expires_at > Time.current
 
           credential = SecureRandom.hex(32)
-          device.update!(credential_digest: VotingDevice.digest_credential(credential),
+          device.update!(state: device.state == 'unavailable' ? 'locked' : device.state,
+                         credential_digest: VotingDevice.digest_credential(credential),
                          pairing_code_digest: nil, pairing_expires_at: nil,
                          credential_version: device.credential_version + 1)
         end
+        disconnect_previous_connections(device)
         cookies.encrypted[:voting_device] = {
           value: "#{device.id}:#{credential}", httponly: true, same_site: :lax,
           secure: Rails.env.production?
@@ -51,6 +55,7 @@ module Api
         device = authenticated_device
         return render_api_error(code: 'unauthorized', message: 'Device authentication required',
                                 status: :unauthorized) unless device
+        return unless allow_attempt!(scope: 'device_confirmations', identity: device.id.to_s, limit: 120, period: 60)
 
         active = device.voting_sessions.find_by(state: %w[released in_progress])
         if active.nil?
@@ -81,6 +86,10 @@ module Api
       end
 
       private
+
+      def disconnect_previous_connections(device)
+        ::Authentication::DisconnectDeviceConnections.call(device: device)
+      end
 
       def invalid_pairing
         render_api_error(code: 'invalid_pairing_code', message: 'Invalid or expired pairing code',
