@@ -119,7 +119,7 @@ credencial do dispositivo; a conta do operador fica no terminal.
 No mesmo console:
 
 ~~~ruby
-$f9_active_session = f9(:post, "/pollworker/voting-devices/#{$f9_device.fetch('id')}/release", round_id: $f9_round_id); puts $f9_active_session.fetch('state'); nil
+$f9_active_session = f9(:post, "/pollworker/voting-devices/#{$f9_device.fetch('id')}/release", round_id: $f9_round_id, command_key: SecureRandom.uuid); puts $f9_active_session.fetch('state'); nil
 ~~~
 
 Repetir antes de votar não deve criar outra sessão. Na página:

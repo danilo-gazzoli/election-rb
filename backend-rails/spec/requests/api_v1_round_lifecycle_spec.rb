@@ -127,7 +127,7 @@ RSpec.describe 'API v1 round lifecycle', type: :request do
 
   it 'continues the same ballot after suspend and resume without losing or duplicating confirmations' do
     login_actor(pollworker)
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     expect(response).to have_http_status(:ok)
     session_id = response.parsed_body.fetch('session_id')
     pair_device
@@ -150,7 +150,7 @@ RSpec.describe 'API v1 round lifecycle', type: :request do
     expect(CastVote.count).to eq(1)
 
     login_actor(pollworker)
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-while-suspended' }, as: :json
     expect(response).to have_http_status(:conflict)
 
     login_actor(creator)

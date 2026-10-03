@@ -38,6 +38,7 @@ Rails.application.routes.draw do
       post 'voting-device/pair', to: 'voting_device#pair'
       get 'voting-device/state', to: 'voting_device#state'
       post 'voting-device/confirmations', to: 'voting_device#confirm'
+      get 'pollworker/rounds/:round_id/voting-devices', to: 'pollworker/voting_devices#index'
       post 'pollworker/voting-devices/:id/release', to: 'pollworker/voting_devices#release'
       post 'pollworker/sessions/:id/abandon', to: 'pollworker/sessions#abandon'
       get 'public/elections/:id/partial', to: 'public/elections#partial'
