@@ -1,0 +1,73 @@
+name: election-pilot
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME_PROD:?Set DB_NAME_PROD}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USERNAME}", "-d", "${DB_NAME_PROD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    image: ${API_IMAGE:-election-api}:${RELEASE_TAG:?Set RELEASE_TAG}
+    build: ../../backend-rails
+    restart: unless-stopped
+    command: ["./bin/rails", "server", "-b", "0.0.0.0"]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      RAILS_ENV: production
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE}
+      DB_HOST: db
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME_PROD: ${DB_NAME_PROD}
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-5}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+    volumes:
+      - storage:/rails/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "X-Forwarded-Proto: https", "http://127.0.0.1:3000/api/v1/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${FRONTEND_DIST:?Set FRONTEND_DIST}:/srv:ro
+      - certificates:/data
+      - proxy_config:/config
+  operations:
+    image: postgres:15
+    profiles: [tools]
+    user: "${OPS_UID:-1000}:${OPS_GID:-1000}"
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      DB_HOST: db
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME_PROD: ${DB_NAME_PROD}
+    entrypoint: ["bash", "/ops/database.sh"]
+    volumes:
+      - ./database.sh:/ops/database.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+volumes:
+  database:
+  storage:
+  certificates:
+  proxy_config:
