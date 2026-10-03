@@ -34,6 +34,7 @@ Rails.application.routes.draw do
       post 'admin/rounds/:id/suspend', to: 'admin/rounds#suspend'
       post 'admin/rounds/:id/resume', to: 'admin/rounds#resume'
       post 'admin/rounds/:id/close', to: 'admin/rounds#close'
+      get 'admin/rounds/:id/results', to: 'admin/rounds#results'
       post 'admin/rounds/:id/annul', to: 'admin/rounds#annul'
       post 'voting-device/pair', to: 'voting_device#pair'
       get 'voting-device/state', to: 'voting_device#state'

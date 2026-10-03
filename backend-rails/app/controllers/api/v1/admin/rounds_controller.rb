@@ -10,6 +10,15 @@ module Api
           render_api_error(code: 'not_found', message: 'Round not found', status: :not_found)
         end
 
+        def results
+          round = Round.find(params[:id])
+          return unless require_role!(round.election, 'creator')
+
+          render json: ::Voting::RoundResult.call(round: round)
+        rescue ::Voting::RoundResult::NotAvailable => e
+          render_api_error(code: 'result_not_available', message: e.message, status: :conflict)
+        end
+
         def suspend
           round = Round.find(params[:id])
           return unless require_role!(round.election, 'creator')
