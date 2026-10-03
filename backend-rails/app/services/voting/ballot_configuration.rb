@@ -3,7 +3,7 @@
 module Voting
   # One read-only ballot definition shared by preview and round opening.
   class BallotConfiguration
-    IMPLEMENTED_METHODS = %w[simple_majority absolute_majority].freeze
+    IMPLEMENTED_METHODS = %w[simple_majority absolute_majority proportional].freeze
 
     def self.call(round:)
       new(round: round).call
@@ -62,8 +62,9 @@ module Voting
     end
 
     def validate_contest(contest)
-      if contest.rule_version.blank?
-        issue('invalid_rule_version', "rule version is required for #{contest.name}", contest_id: contest.id)
+      if contest.rule_version.blank? ||
+         (contest.method == 'proportional' && contest.rule_version != ProportionalCore::ALGORITHM_VERSION)
+        issue('invalid_rule_version', "implemented rule version is required for #{contest.name}", contest_id: contest.id)
       end
       unless IMPLEMENTED_METHODS.include?(contest.method)
         issue('unavailable_method', "tally method #{contest.method} is not available", contest_id: contest.id)

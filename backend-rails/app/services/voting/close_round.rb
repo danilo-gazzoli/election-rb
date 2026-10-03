@@ -37,7 +37,7 @@ module Voting
                    elsif contest.method == 'absolute_majority'
                      AbsoluteMajorityTally.call(round_contest: round_contest)
                    elsif contest.method == 'proportional'
-                     ProportionalInitialTally.call(round_contest: round_contest)
+                     ProportionalInitialTally.call(round_contest: round_contest, calculator: ProportionalRemainders)
                    else
                      { status: 'pending', reason: 'tally method is not implemented' }
                    end
