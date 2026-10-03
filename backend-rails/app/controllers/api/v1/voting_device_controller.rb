@@ -105,15 +105,18 @@ module Api
       end
 
       def stage_catalog(stage)
-        contest = stage.round_contest.contest
-        candidates = RoundCandidacy.where(round_id: stage.round_id, eligible: true)
-                                    .joins(:candidacy).where(candidacies: { contest_id: contest.id })
-                                    .order(:candidacy_id).map do |entry|
-          candidate = entry.candidacy
-          { id: candidate.id, number: candidate.ballot_number, name: candidate.principal_person.name }
+        ballot = ConfigurationSnapshot.find_by!(round_id: stage.round_id).canonical_data
+        contest = ballot.fetch('contests').find { |item| item.fetch('id') == stage.round_contest.contest_id }
+        parties = ballot.fetch('parties').index_by { |party| party.fetch('id') }
+        eligible_ids = RoundCandidacy.where(round_id: stage.round_id, eligible: true).pluck(:candidacy_id)
+        candidates = contest.fetch('candidacies').select { |candidate| eligible_ids.include?(candidate.fetch('id')) }
+                            .sort_by { |candidate| candidate.fetch('id') }.map do |candidate|
+          { id: candidate.fetch('id'), number: candidate.fetch('number'),
+            name: candidate.fetch('principal_person').fetch('name') }
+            .merge(Voting::FrozenCandidateIdentity.call(candidate: candidate, parties: parties))
         end
-        { id: stage.id, contest: contest.name, choice_index: stage.choice_index,
-          method: contest.method, candidates: candidates }
+        { id: stage.id, contest: contest.fetch('name'), choice_index: stage.choice_index,
+          method: contest.fetch('method'), candidates: candidates }
       end
     end
   end

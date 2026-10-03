@@ -30,6 +30,7 @@ Rails.application.routes.draw do
       post 'admin/elections/:election_id/voting-devices', to: 'admin/voting_devices#create'
       post 'admin/elections/:election_id/voting-devices/:id/revoke', to: 'admin/voting_devices#revoke'
       post 'admin/elections/:election_id/voting-devices/:id/pairing-code', to: 'admin/voting_devices#renew_pairing_code'
+      post 'admin/rounds/:id/runoff', to: 'admin/rounds#runoff'
       post 'admin/rounds/:id/open', to: 'admin/rounds#open'
       post 'admin/rounds/:id/suspend', to: 'admin/rounds#suspend'
       post 'admin/rounds/:id/resume', to: 'admin/rounds#resume'
