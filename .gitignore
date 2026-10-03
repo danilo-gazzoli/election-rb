@@ -2,3 +2,4 @@
 /deployment/pilot/backups/
 /deployment/pilot/rehearsal-results/
 /deployment/pilot/decisions.local.md
+.env
