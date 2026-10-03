@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rails_helper'
+require 'digest'
 
 RSpec.describe 'API v1 voting flow', type: :request do
   let(:installation) { SchoolInstallation.create!(identifier: 'flow-school', name: 'Flow School') }
@@ -50,6 +51,10 @@ RSpec.describe 'API v1 voting flow', type: :request do
     RoundCandidacy.create!(round: round, candidacy: other_candidate)
     first_stage
     second_stage
+    ballot = Voting::BallotConfiguration.call(round: round).fetch(:ballot)
+    ConfigurationSnapshot.create!(round: round, version: election.configuration_version,
+                                  canonical_data: ballot, digest: Digest::SHA256.hexdigest(JSON.generate(ballot)),
+                                  created_at: Time.current)
     round.update!(state: 'open')
     device
   end

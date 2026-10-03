@@ -12,12 +12,11 @@ module Api
           return render_api_error(code: 'not_available', message: 'No active round',
                                   status: :not_found) unless round
 
-          contests = round.round_contests.includes(:contest).map do |round_contest|
-            Voting::PartialResult.call(round_contest: round_contest).merge(
-              contest_id: round_contest.contest_id, contest_name: round_contest.contest.name
-            )
-          end
-          render json: { status: 'partial', round_number: round.number, contests: contests }
+          render json: Voting::PublicPartialResult.call(round: round)
+        rescue Voting::PublicPartialResult::NotAvailable
+          render_api_error(code: 'not_available', message: 'No active public round', status: :not_found)
+        rescue ActiveRecord::RecordNotFound
+          render_api_error(code: 'not_found', message: 'Election or opened ballot not found', status: :not_found)
         end
       end
     end

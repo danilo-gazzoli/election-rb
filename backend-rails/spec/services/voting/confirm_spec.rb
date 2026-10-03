@@ -248,10 +248,10 @@ RSpec.describe Voting::Confirm do
 
     stages = Voting::PartialResult.call(round_contest: round_contest).fetch(:stages)
     expect(stages).to eq([
-      { stage_id: first_stage.id, choice_index: 1, nominal_votes: 1, blank_votes: 0,
-        null_votes: 0, administrative_null_votes: 0 },
-      { stage_id: second_stage.id, choice_index: 2, nominal_votes: 0, blank_votes: 0,
-        null_votes: 1, administrative_null_votes: 0 }
+      { stage_id: first_stage.id, choice_index: 1, nominal_votes: 1, legend_votes: 0, blank_votes: 0,
+        null_votes: 0, administrative_null_votes: 0, total_votes: 1 },
+      { stage_id: second_stage.id, choice_index: 2, nominal_votes: 0, legend_votes: 0, blank_votes: 0,
+        null_votes: 1, administrative_null_votes: 0, total_votes: 1 }
     ])
   end
 

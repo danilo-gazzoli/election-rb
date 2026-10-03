@@ -25,14 +25,20 @@ module Voting
         blank_votes: kind_counts.fetch('blank', 0),
         null_votes: kind_counts.fetch('null', 0),
         valid_votes: valid,
+        total_votes: kind_counts.values.sum,
+        administrative_null_votes: counts_by_stage.sum { |(_, kind, origin), count|
+          kind == 'null' && origin == 'abandonment' ? count : 0
+        },
         stages: VotingStage.where(round_contest_id: round_contest.id).order(:choice_index).map do |stage|
           stage_counts = counts_by_stage.select { |(stage_id, _, _), _| stage_id == stage.id }
           count_kind = ->(kind) { stage_counts.sum { |(_, vote_kind, _), count| vote_kind == kind ? count : 0 } }
           {
             stage_id: stage.id, choice_index: stage.choice_index,
-            nominal_votes: count_kind.call('nominal'), blank_votes: count_kind.call('blank'),
+            nominal_votes: count_kind.call('nominal'), legend_votes: count_kind.call('legend'),
+            blank_votes: count_kind.call('blank'),
             null_votes: count_kind.call('null'),
-            administrative_null_votes: counts_by_stage.fetch([stage.id, 'null', 'abandonment'], 0)
+            administrative_null_votes: counts_by_stage.fetch([stage.id, 'null', 'abandonment'], 0),
+            total_votes: stage_counts.values.sum
           }
         end,
         candidates: candidate_ids.sort.map do |id|
