@@ -105,6 +105,7 @@ RSpec.describe 'API v1 absolute majority and runoff contract' do
       { '$ref' => '#/components/schemas/SimpleMajorityFinal' },
       { '$ref' => '#/components/schemas/AbsoluteMajorityFinal' },
       { '$ref' => '#/components/schemas/RunoffRequiredResult' },
+      { '$ref' => '#/components/schemas/ProportionalInitialResult' },
       { '$ref' => '#/components/schemas/PendingTallyResult' }
     ])
     final = schemas.fetch('AbsoluteMajorityFinal')

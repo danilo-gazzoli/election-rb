@@ -2634,6 +2634,7 @@ components:
             - $ref: '#/components/schemas/SimpleMajorityFinal'
             - $ref: '#/components/schemas/AbsoluteMajorityFinal'
             - $ref: '#/components/schemas/RunoffRequiredResult'
+            - $ref: '#/components/schemas/ProportionalInitialResult'
             - $ref: '#/components/schemas/PendingTallyResult'
     SimpleMajorityFinal:
       type: object
@@ -2656,6 +2657,109 @@ components:
           additionalProperties:
             type: integer
             minimum: 1
+    ProportionalInitialResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded initial proportional allocation, pending until F10b completes remainder
+        distribution. Initial ids describe occupied QP seats, not published final winners.
+        Unallocated seats cannot exceed seats. Zero QE is never used as a divisor.
+      required: [algorithm_version, status, reason, seats, valid_votes, nominal_votes, legend_votes, blank_votes, null_votes, qe, units, unallocated_seats]
+      properties:
+        algorithm_version:
+          type: string
+          enum: [proporcional_br_2026_v1]
+        status:
+          type: string
+          enum: [pending]
+        reason:
+          type: string
+        seats:
+          type: integer
+          minimum: 1
+        valid_votes:
+          type: integer
+          minimum: 0
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+        qe:
+          type: integer
+          minimum: 0
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProportionalInitialUnit'
+        unallocated_seats:
+          type: integer
+          minimum: 0
+    ProportionalInitialUnit:
+      type: object
+      additionalProperties: false
+      description: >-
+        Aggregate party or federation calculation. QP records seats obtained;
+        initial_ids records those occupied, and unfilled_qp_seats records the difference.
+        Candidate counts are nominal only; legend votes are assigned to the unit.
+      required: [kind, id, party_ids, nominal_votes, legend_votes, votes, qp, candidates, initial_ids, unfilled_qp_seats]
+      properties:
+        kind:
+          type: string
+          enum: [party, federation]
+        id:
+          type: integer
+          minimum: 1
+        party_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        votes:
+          type: integer
+          minimum: 0
+        qp:
+          type: integer
+          minimum: 0
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, party_id, votes]
+            properties:
+              id:
+                type: integer
+                minimum: 1
+              party_id:
+                type: integer
+                minimum: 1
+              votes:
+                type: integer
+                minimum: 0
+        initial_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        unfilled_qp_seats:
+          type: integer
+          minimum: 0
     PendingTallyResult:
       type: object
       additionalProperties: false

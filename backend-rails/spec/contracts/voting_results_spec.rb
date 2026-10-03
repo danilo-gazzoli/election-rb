@@ -80,6 +80,7 @@ RSpec.describe 'API v1 partial and recorded results contract' do
       { '$ref' => '#/components/schemas/SimpleMajorityFinal' },
       { '$ref' => '#/components/schemas/AbsoluteMajorityFinal' },
       { '$ref' => '#/components/schemas/RunoffRequiredResult' },
+      { '$ref' => '#/components/schemas/ProportionalInitialResult' },
       { '$ref' => '#/components/schemas/PendingTallyResult' }
     ])
     expect(schemas.fetch('SimpleMajorityFinal').fetch('required')).to match_array(%w[status elected_ids valid_votes counts])
