@@ -1,6 +1,11 @@
 
 # Web-based Elections System
 
+> Operação do backend atual: [guia F12 de implantação, recuperação e piloto](deployment/pilot/README.md).
+> O frontend-voting é um protótipo de teste; o frontend definitivo e o aceite na escola continuam pendentes.
+> Consulte o [contrato OpenAPI v1](backend-rails/openapi/v1.yaml) para integrar um cliente independente.
+
+
 Welcome to the Web-based Elections System for Schools repository!
 This project aims to provide a practical, transparent, and cost-effective solution for conducting elections in a school environment, simulating aspects of the Brazilian electoral system.
 
