@@ -46,6 +46,7 @@ module Voting
         affected_devices.uniq
       end
       device_ids.each { |device_id| NotifyDeviceState.call(device_id: device_id) }
+      NotifyPublicResults.call(election_id: round.election_id)
       round
     end
   end

@@ -5,6 +5,9 @@ module ApplicationCable
     identified_by :current_voting_device, :current_user
 
     def connect
+      # Public result connections carry no operator or voting device identity.
+      return if request.params[:audience] == 'public'
+
       if cookies.encrypted[:voting_device].present?
         connect_device
       else
