@@ -55,7 +55,10 @@ module Voting
           confirmed(receipt)
         end
       end
-      NotifyDeviceState.call(device_id: @session.voting_device_id) if committed
+      if committed
+        NotifyDeviceState.call(device_id: @session.voting_device_id)
+        NotifyPublicResults.call(election_id: @session.round.election_id)
+      end
       result
     end
 

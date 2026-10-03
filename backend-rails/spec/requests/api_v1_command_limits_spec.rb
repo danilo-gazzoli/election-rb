@@ -46,7 +46,7 @@ RSpec.describe 'API v1 authenticated command limits', type: :request do
     authenticate(pollworker)
     exhaust('operator_commands', pollworker.id, 60)
     expect do
-      post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+      post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     end.not_to change(VotingSession, :count)
     expect(response).to have_http_status(:too_many_requests)
     expect(device.reload.state).to eq('locked')
@@ -60,7 +60,7 @@ RSpec.describe 'API v1 authenticated command limits', type: :request do
     expect(response).to have_http_status(:ok)
     expect(response.parsed_body.fetch('user').fetch('id')).to eq(creator.id)
     authenticate(pollworker)
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     expect(response).to have_http_status(:ok)
   end
 

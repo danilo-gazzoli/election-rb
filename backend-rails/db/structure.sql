@@ -1,4 +1,4 @@
-\restrict y1ZyLQf9GahyNlcrDp8sTujehxQj4VgfU4Pne8N6NlAiHXfW2dpTbABVpnGAJHs
+\restrict kZgfi1xLPhXe3zflBu5C2ik2jXGhn3zlY7gcXAibC563qMexaW7r3JVMpKBvxbJ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -355,6 +355,19 @@ BEGIN
     RAISE EXCEPTION 'round lifecycle cannot move from % to %', OLD.state, NEW.state;
   END IF;
   RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: protect_voting_release_commands(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_voting_release_commands() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'voting release commands are immutable';
 END;
 $$;
 
@@ -1572,6 +1585,40 @@ ALTER SEQUENCE public.voting_devices_id_seq OWNED BY public.voting_devices.id;
 
 
 --
+-- Name: voting_release_commands; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.voting_release_commands (
+    id bigint NOT NULL,
+    voting_device_id bigint NOT NULL,
+    round_id bigint NOT NULL,
+    voting_session_id uuid NOT NULL,
+    command_key character varying(128) NOT NULL,
+    created_at timestamp(6) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT voting_release_command_key_present CHECK ((btrim((command_key)::text) <> ''::text))
+);
+
+
+--
+-- Name: voting_release_commands_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.voting_release_commands_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: voting_release_commands_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.voting_release_commands_id_seq OWNED BY public.voting_release_commands.id;
+
+
+--
 -- Name: voting_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1811,6 +1858,13 @@ ALTER TABLE ONLY public.votes ALTER COLUMN id SET DEFAULT nextval('public.votes_
 --
 
 ALTER TABLE ONLY public.voting_devices ALTER COLUMN id SET DEFAULT nextval('public.voting_devices_id_seq'::regclass);
+
+
+--
+-- Name: voting_release_commands id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands ALTER COLUMN id SET DEFAULT nextval('public.voting_release_commands_id_seq'::regclass);
 
 
 --
@@ -2069,6 +2123,14 @@ ALTER TABLE ONLY public.voting_devices
 
 
 --
+-- Name: voting_release_commands voting_release_commands_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands
+    ADD CONSTRAINT voting_release_commands_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: voting_sessions voting_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2173,6 +2235,20 @@ CREATE UNIQUE INDEX idx_owned_party_number ON public.parties USING btree (electi
 --
 
 CREATE UNIQUE INDEX idx_receipt_command_key ON public.confirmation_receipts USING btree (voting_session_id, command_key);
+
+
+--
+-- Name: idx_voting_release_device_command; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_voting_release_device_command ON public.voting_release_commands USING btree (voting_device_id, command_key);
+
+
+--
+-- Name: idx_voting_session_release_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_voting_session_release_identity ON public.voting_sessions USING btree (id, voting_device_id, round_id);
 
 
 --
@@ -2617,6 +2693,27 @@ CREATE INDEX index_voting_devices_on_school_installation_id ON public.voting_dev
 
 
 --
+-- Name: index_voting_release_commands_on_round_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_voting_release_commands_on_round_id ON public.voting_release_commands USING btree (round_id);
+
+
+--
+-- Name: index_voting_release_commands_on_voting_device_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_voting_release_commands_on_voting_device_id ON public.voting_release_commands USING btree (voting_device_id);
+
+
+--
+-- Name: index_voting_release_commands_on_voting_session_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_voting_release_commands_on_voting_session_id ON public.voting_release_commands USING btree (voting_session_id);
+
+
+--
 -- Name: index_voting_sessions_on_round_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2862,6 +2959,13 @@ CREATE TRIGGER tally_run_immutable BEFORE DELETE OR UPDATE ON public.tally_runs 
 
 
 --
+-- Name: voting_release_commands voting_release_command_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER voting_release_command_immutable BEFORE DELETE OR UPDATE ON public.voting_release_commands FOR EACH ROW EXECUTE FUNCTION public.protect_voting_release_commands();
+
+
+--
 -- Name: voting_sessions voting_session_installation_valid; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3042,6 +3146,14 @@ ALTER TABLE ONLY public.ballots
 
 
 --
+-- Name: voting_release_commands fk_rails_69ed4927ac; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands
+    ADD CONSTRAINT fk_rails_69ed4927ac FOREIGN KEY (voting_session_id) REFERENCES public.voting_sessions(id);
+
+
+--
 -- Name: confirmation_receipts fk_rails_6a4ed06128; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3159,6 +3271,14 @@ ALTER TABLE ONLY public.active_storage_variant_records
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT fk_rails_9bf0b6433f FOREIGN KEY (election_id) REFERENCES public.elections(id);
+
+
+--
+-- Name: voting_release_commands fk_rails_aba10ae0e7; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands
+    ADD CONSTRAINT fk_rails_aba10ae0e7 FOREIGN KEY (round_id) REFERENCES public.rounds(id);
 
 
 --
@@ -3314,14 +3434,31 @@ ALTER TABLE ONLY public.parties
 
 
 --
+-- Name: voting_release_commands fk_rails_fffc14e88c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands
+    ADD CONSTRAINT fk_rails_fffc14e88c FOREIGN KEY (voting_device_id) REFERENCES public.voting_devices(id);
+
+
+--
+-- Name: voting_release_commands fk_voting_release_session_identity; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voting_release_commands
+    ADD CONSTRAINT fk_voting_release_session_identity FOREIGN KEY (voting_session_id, voting_device_id, round_id) REFERENCES public.voting_sessions(id, voting_device_id, round_id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict y1ZyLQf9GahyNlcrDp8sTujehxQj4VgfU4Pne8N6NlAiHXfW2dpTbABVpnGAJHs
+\unrestrict kZgfi1xLPhXe3zflBu5C2ik2jXGhn3zlY7gcXAibC563qMexaW7r3JVMpKBvxbJ
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261002030000'),
 ('20261002020000'),
 ('20261002010000'),
 ('20261001050000'),

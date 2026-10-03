@@ -50,6 +50,25 @@ x-websocket-channels:
       Notifications request an authorized HTTP refresh; they contain no choices
       or session identifiers. Device cookies take priority when both identities
       are present; use separate browser contexts for operator and voting device.
+  PublicResultsChannel:
+    authentication: public
+    scope: election
+    connect_path: /cable?audience=public
+    x-implementation-status: implemented
+    subscription_parameters: [election_id]
+    message_schema: '#/components/schemas/PublicResultsChanged'
+    description: >-
+      Explicit public mode ignores user and device cookies and grants no private
+      channel access. Subscription requires an open or suspended election round.
+      Refresh hints are sent after commit for confirmed votes, administrative
+      nulls from abandonment, closure and annulment. Releases, warnings and
+      confirmation replays do not emit a public refresh. Messages contain only
+      the election identity and opaque revision, never choices or arrival times.
+      Fetch GET /api/v1/public/elections/{id}/partial over HTTP after a message
+      and after reconnecting; notifications are best effort and may be missed.
+      Compare revisions for equality, not ordering. A terminal invalidation
+      requests a refetch returning not_available; it does not publish a public
+      report or elected candidates. Origin must match the application origin.
   transport:
     protocol: action-cable
     path: /cable
@@ -1041,25 +1060,89 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/pollworker/rounds/{round_id}/voting-devices:
+    parameters:
+      - name: round_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listPollworkerVotingDevices
+      summary: Consult operational device state for an election round
+      description: >-
+        Read-only consultation requiring an active pollworker role in this election
+        and school. Lists school devices in ascending id order, with only the active
+        session of the requested round and that session's incident ids and kinds.
+        Does not start a session or change participation, votes or audit.
+        Choices, receipts and credentials are never returned. Refresh this endpoint
+        after a private pollworker state_changed notification or reconnection.
+      x-implementation-status: implemented
+      x-authentication: poll-worker-session
+      responses:
+        '200':
+          description: Operational school device catalog for this round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollworkerDeviceCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/pollworker/voting-devices/{id}/release:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
     post:
       operationId: releaseVotingDevice
       summary: Release one anonymous voting session after physical identity check
+      description: >-
+        Requires an active pollworker role in the election and school, and CSRF.
+        Generate a command_key for each release intent and reuse the same command_key
+        for retries on the same device. Replays return the original session and its
+        current state, including completed, abandoned or cancelled, with no new session,
+        audit or notification. An old command never releases the next voter.
+        Keys are scoped to the device; reuse for another round is a conflict.
+        A new release requires an open round within its release window.
+        The key is an operational retry identifier, not a voter credential.
       x-implementation-status: implemented
       x-authentication: poll-worker-session-with-csrf
       x-rate-limits:
         - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VotingDeviceReleaseRequest'
       responses:
         '200':
-          description: Current operational session state
+          description: Original operational session identity and current state
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VotingDeviceSession'
+        '400':
+          description: invalid_command_key; key is missing, blank, not a string or longer than 128 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/ApiError'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          description: release_command_conflict for reuse in another round, or release_denied for an unavailable new release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -1178,19 +1261,75 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/rounds/{id}/results:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      operationId: getRecordedRoundResults
+      summary: Read recorded tallies as the election creator
+      description: >-
+        Requires an active creator role in the election and school. Reads the recorded
+        TallyRun results only after closure, preserving final or pending outcomes,
+        rule version and input digest. Does not recalculate, does not publish a public
+        report, and does not change votes, audit or tallies. Rejects open, annulled or
+        cancelled elections and incomplete recorded tallies. Public report publication
+        remains a separate command. No session, device, receipt or individual vote metadata.
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Recorded aggregate results, final only when every contest is final
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordedRoundResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: result_not_available; round is not eligible or a recorded contest tally is missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/ApiError'
+
   /api/v1/public/elections/{id}/partial:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
     get:
       operationId: getPartialResults
       summary: Read aggregate partial counts without a winner
+      description: >-
+        Anonymous, read-only counts for the latest open or suspended round. Includes
+        only committed votes and started participation; a release or unconfirmed
+        warning does not count as a vote. Never declares elected candidates.
+        Names and ballot numbers come from the opened snapshot. Blank and null votes
+        are outside the valid denominator; proportional legend votes are inside it.
+        Live percentages may allow observers to infer a recent choice in small groups;
+        the installation must explain this limitation. No session, device, receipt,
+        arrival order or individual vote timestamp is returned. Closed, annulled,
+        cancelled or unopened ballots are not live partials. Final public reports
+        require separate publication.
       x-implementation-status: implemented
       x-authentication: public
       responses:
         '200':
-          description: Aggregate partial results
+          description: Aggregate partial results without a winner
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/PublicPartialResult'
+        '404':
+          description: not_found for an unknown election or opened snapshot; not_available without an active eligible round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/ApiError'
 
@@ -1450,6 +1589,20 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    PublicResultsChanged:
+      type: object
+      additionalProperties: false
+      required: [event, election_id, revision]
+      properties:
+        event:
+          type: string
+          enum: [results_changed]
+        election_id:
+          type: integer
+        revision:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque equality token for a public aggregate or unavailability; not a vote sequence or timestamp. Retrieve current state by HTTP.
     OperationalStateChanged:
       type: object
       additionalProperties: false
@@ -1974,8 +2127,74 @@ components:
         state:
           type: string
           enum: [open, suspended, annulled]
+    PollworkerDeviceCatalog:
+      type: object
+      additionalProperties: false
+      required: [round_id, devices]
+      properties:
+        round_id:
+          type: integer
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollworkerOperationalDevice'
+    PollworkerOperationalDevice:
+      type: object
+      additionalProperties: false
+      required: [id, public_label, state, session, incidents]
+      properties:
+        id:
+          type: integer
+        public_label:
+          type: string
+        state:
+          type: string
+          enum: [locked, released, in_progress, unavailable]
+          description: Current school device state; session details are limited to the requested round.
+        session:
+          $ref: '#/components/schemas/PollworkerSessionProgress'
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollworkerIncident'
+    PollworkerSessionProgress:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, state, current_stage_position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [released, in_progress]
+        current_stage_position:
+          type: integer
+    PollworkerIncident:
+      type: object
+      additionalProperties: false
+      required: [id, kind]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+    VotingDeviceReleaseRequest:
+      type: object
+      required: [round_id, command_key]
+      properties:
+        round_id:
+          type: integer
+        command_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '\S'
+          description: One key per release intent on a device; reuse it for retries, never as a voter credential.
     VotingDeviceSession:
       type: object
+      additionalProperties: false
       required: [session_id, state]
       properties:
         session_id:
@@ -1983,6 +2202,7 @@ components:
           format: uuid
         state:
           type: string
+          enum: [released, in_progress, completed, abandoned, cancelled]
     VotingDeviceState:
       type: object
       required: [state, round_state]
@@ -2037,3 +2257,193 @@ components:
           enum: [confirmed]
         next_stage_position:
           type: integer
+    PublicPartialResult:
+      type: object
+      additionalProperties: false
+      required: [status, round_number, contests, revision]
+      properties:
+        revision:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque equality token derived only from the public aggregate projection; not a vote sequence or timestamp. Refetch by HTTP after reconnecting and compare for equality.
+        status:
+          type: string
+          enum: [partial]
+        round_number:
+          type: integer
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPartialContest'
+    PublicPartialContest:
+      type: object
+      additionalProperties: false
+      required: [status, participation, confirmations, nominal_votes, legend_votes, blank_votes, null_votes, valid_votes, total_votes, administrative_null_votes, stages, candidates, contest_id, contest_name]
+      properties:
+        status:
+          type: string
+          enum: [partial]
+        contest_id:
+          type: integer
+        contest_name:
+          type: string
+        participation:
+          type: integer
+          minimum: 0
+          description: Started sessions in the round, not releases or votes; repeated across its contests.
+        confirmations:
+          type: integer
+          minimum: 0
+          description: Durable confirmation receipts in this contest, excluding administrative abandonment nulls.
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+          description: Voter and administrative nulls together.
+        valid_votes:
+          type: integer
+          minimum: 0
+          description: Nominal for majority; nominal plus legend for proportional contests.
+        total_votes:
+          type: integer
+          minimum: 0
+          description: All vote types across the contest stages, including administrative nulls.
+        administrative_null_votes:
+          type: integer
+          minimum: 0
+          description: Subset of null_votes originating in formal abandonment, not extra confirmations.
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartialStageTotals'
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCandidatePercentage'
+    PublicCandidatePercentage:
+      type: object
+      additionalProperties: false
+      required: [candidacy_id, name, ballot_number, votes, percentage]
+      properties:
+        candidacy_id:
+          type: integer
+        name:
+          type: string
+          description: Principal candidate name in the opened ballot snapshot.
+        ballot_number:
+          type: string
+          description: Frozen ballot number, preserving leading zeros.
+        votes:
+          type: integer
+          minimum: 0
+        percentage:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: >-
+            Nominal candidate votes divided by valid votes across all contest stages,
+            multiplied by 100 and rounded to two decimals. Legend is included in the
+            proportional denominator; blank and null are excluded. Null when valid
+            votes are zero; the frontend displays a dash rather than zero percent.
+    PartialStageTotals:
+      type: object
+      additionalProperties: false
+      required: [stage_id, choice_index, nominal_votes, legend_votes, blank_votes, null_votes, administrative_null_votes, total_votes]
+      properties:
+        stage_id:
+          type: integer
+        choice_index:
+          type: integer
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+        administrative_null_votes:
+          type: integer
+          minimum: 0
+        total_votes:
+          type: integer
+          minimum: 0
+    RecordedRoundResult:
+      type: object
+      additionalProperties: false
+      required: [status, round_number, contests]
+      properties:
+        status:
+          type: string
+          enum: [final, pending]
+        round_number:
+          type: integer
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordedContestResult'
+    RecordedContestResult:
+      type: object
+      additionalProperties: false
+      required: [contest_id, contest_name, status, rule_version, input_digest, result]
+      properties:
+        contest_id:
+          type: integer
+        contest_name:
+          type: string
+        status:
+          type: string
+          enum: [final, pending]
+        rule_version:
+          type: string
+        input_digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/SimpleMajorityFinal'
+            - $ref: '#/components/schemas/PendingTallyResult'
+    SimpleMajorityFinal:
+      type: object
+      additionalProperties: false
+      required: [status, elected_ids, valid_votes, counts]
+      properties:
+        status:
+          type: string
+          enum: [final]
+        elected_ids:
+          type: array
+          items:
+            type: integer
+        valid_votes:
+          type: integer
+          minimum: 1
+        counts:
+          type: object
+          description: Aggregate nominal votes keyed by candidacy id.
+          additionalProperties:
+            type: integer
+            minimum: 1
+    PendingTallyResult:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [pending]
+        reason:
+          type: string

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rails_helper'
+require 'digest'
 
 RSpec.describe 'API v1 voting flow', type: :request do
   let(:installation) { SchoolInstallation.create!(identifier: 'flow-school', name: 'Flow School') }
@@ -50,13 +51,17 @@ RSpec.describe 'API v1 voting flow', type: :request do
     RoundCandidacy.create!(round: round, candidacy: other_candidate)
     first_stage
     second_stage
+    ballot = Voting::BallotConfiguration.call(round: round).fetch(:ballot)
+    ConfigurationSnapshot.create!(round: round, version: election.configuration_version,
+                                  canonical_data: ballot, digest: Digest::SHA256.hexdigest(JSON.generate(ballot)),
+                                  created_at: Time.current)
     round.update!(state: 'open')
     device
   end
 
   it 'lets the voter correct a repeated second choice after the warning' do
     post '/api/v1/auth/login', params: { login: worker.login, password: 'long-random-password' }, as: :json
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     device.update!(pairing_code_digest: VotingDevice.digest_credential('pair-code'),
                    pairing_expires_at: 10.minutes.from_now)
     post '/api/v1/voting-device/pair', params: { pairing_code: 'pair-code' }, as: :json
@@ -80,7 +85,7 @@ RSpec.describe 'API v1 voting flow', type: :request do
 
   it 'releases through the worker and confirms through the paired device' do
     post '/api/v1/auth/login', params: { login: 'worker', password: 'long-random-password' }, as: :json
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     expect(response).to have_http_status(:ok)
 
     device.update!(pairing_code_digest: VotingDevice.digest_credential('pair-code'),
@@ -138,7 +143,7 @@ RSpec.describe 'API v1 voting flow', type: :request do
 
   it 'abandons only the remaining stage without exposing the first choice to the pollworker' do
     post '/api/v1/auth/login', params: { login: worker.login, password: 'long-random-password' }, as: :json
-    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id }, as: :json
+    post "/api/v1/pollworker/voting-devices/#{device.id}/release", params: { round_id: round.id, command_key: 'release-command' }, as: :json
     session_id = response.parsed_body.fetch('session_id')
 
     device.update!(pairing_code_digest: VotingDevice.digest_credential('pair-code'),

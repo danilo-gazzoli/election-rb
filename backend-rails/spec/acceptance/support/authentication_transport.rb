@@ -39,9 +39,9 @@ module AuthenticationTransport
   class CableClient
     attr_reader :url, :driver
 
-    def initialize(origin, cookie:, request_origin: origin)
+    def initialize(origin, cookie:, request_origin: origin, path: '/cable')
       uri = URI(origin)
-      @url = "ws://#{uri.host}:#{uri.port}/cable"
+      @url = "ws://#{uri.host}:#{uri.port}#{path}"
       @socket = TCPSocket.new(uri.host, uri.port)
       @messages = []
       @error = nil

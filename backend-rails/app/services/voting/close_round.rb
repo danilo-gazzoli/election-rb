@@ -12,7 +12,7 @@ module Voting
         ElectionRole.exists?(election_id: round.election_id, user_id: actor.id,
                              role: 'creator', active: true)
 
-      round.with_lock do
+      result = round.with_lock do
         raise NotAllowed, 'election is cancelled' if round.election.reload.canceled?
         raise NotAllowed, 'round is not open' unless %w[open suspended].include?(round.state)
         raise NotAllowed, 'grace period has not ended' if now < round.grace_until
@@ -48,6 +48,8 @@ module Voting
         AuditEvent.create!(election: round.election, user: actor, action: 'round_close',
                            result: 'success', occurred_at: now)
       end
+      NotifyPublicResults.call(election_id: round.election_id)
+      result
     end
   end
 end

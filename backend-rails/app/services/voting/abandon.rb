@@ -52,6 +52,7 @@ module Voting
         end
       end
       NotifyDeviceState.call(device_id: session.voting_device_id) if changed
+      NotifyPublicResults.call(election_id: election.id) if changed && session.state == 'abandoned'
       result
     end
   end
