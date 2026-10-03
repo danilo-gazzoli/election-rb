@@ -134,4 +134,19 @@ RSpec.describe 'Durable public result notifications', type: :service do
     expect_public_event
     expect(VotingSession.count).to eq(0)
   end
+  it 'announces the published report digest after commit and emits nothing on replay' do
+    confirm_first_vote
+    Voting::Confirm.call(session: voting_session, stage_id: second_stage.id, command_key: 'report-last-choice',
+                         kind: 'nominal', candidacy_id: contest.candidacies.order(:id).second.id, now: now)
+    Voting::CloseRound.call(round: round, actor: creator, now: round.grace_until + 1.second)
+    terminal_revision = @events.last.last.fetch(:revision)
+    @events.clear
+    report = Voting::PublishReport.call(election: election, actor: creator, now: round.grace_until + 2.seconds)
+    expect_public_event(report.input_digest)
+    expect(report.input_digest).not_to eq(terminal_revision)
+    @events.clear
+    Voting::PublishReport.call(election: election, actor: creator, now: round.grace_until + 3.seconds)
+    expect(@events).to be_empty
+  end
+
 end

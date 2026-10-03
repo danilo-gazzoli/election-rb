@@ -11,6 +11,7 @@ Rails.application.routes.draw do
       get 'admin/elections/:id', to: 'admin/elections#show'
       patch 'admin/elections/:id', to: 'admin/elections#update'
       post 'admin/elections/:id/preview', to: 'admin/elections#preview'
+      post 'admin/elections/:id/publish', to: 'admin/reports#publish'
       get 'admin/elections/:election_id/federations', to: 'admin/federations#index'
       post 'admin/elections/:election_id/federations', to: 'admin/federations#create'
       patch 'admin/elections/:election_id/federations/:id', to: 'admin/federations#update'
@@ -44,6 +45,7 @@ Rails.application.routes.draw do
       post 'pollworker/voting-devices/:id/release', to: 'pollworker/voting_devices#release'
       post 'pollworker/sessions/:id/abandon', to: 'pollworker/sessions#abandon'
       get 'public/elections/:id/partial', to: 'public/elections#partial'
+      get 'public/elections/:id/report', to: 'public/elections#report'
       get 'health', to: 'health#show'
       match '*unmatched', to: 'errors#not_found', via: :all
     end

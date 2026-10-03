@@ -321,6 +321,19 @@ $$;
 
 
 --
+-- Name: protect_report_versions(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_report_versions() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'published reports are immutable';
+END;
+$$;
+
+
+--
 -- Name: protect_round_agenda(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1300,6 +1313,41 @@ ALTER SEQUENCE public.pollworkers_id_seq OWNED BY public.pollworkers.id;
 
 
 --
+-- Name: report_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.report_versions (
+    id bigint NOT NULL,
+    election_id bigint NOT NULL,
+    previous_version_id bigint,
+    version integer NOT NULL,
+    input_digest character varying NOT NULL,
+    content jsonb NOT NULL,
+    published_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT report_version_positive CHECK ((version > 0))
+);
+
+
+--
+-- Name: report_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.report_versions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: report_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.report_versions_id_seq OWNED BY public.report_versions.id;
+
+
+--
 -- Name: round_candidacies; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1805,6 +1853,13 @@ ALTER TABLE ONLY public.pollworkers ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
+-- Name: report_versions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.report_versions ALTER COLUMN id SET DEFAULT nextval('public.report_versions_id_seq'::regclass);
+
+
+--
 -- Name: round_candidacies id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2048,6 +2103,14 @@ ALTER TABLE ONLY public.parties
 
 ALTER TABLE ONLY public.pollworkers
     ADD CONSTRAINT pollworkers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: report_versions report_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.report_versions
+    ADD CONSTRAINT report_versions_pkey PRIMARY KEY (id);
 
 
 --
@@ -2574,6 +2637,27 @@ CREATE INDEX index_pollworkers_on_election_id ON public.pollworkers USING btree 
 
 
 --
+-- Name: index_report_versions_on_election_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_report_versions_on_election_id ON public.report_versions USING btree (election_id);
+
+
+--
+-- Name: index_report_versions_on_election_id_and_version; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_report_versions_on_election_id_and_version ON public.report_versions USING btree (election_id, version);
+
+
+--
+-- Name: index_report_versions_on_previous_version_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_report_versions_on_previous_version_id ON public.report_versions USING btree (previous_version_id);
+
+
+--
 -- Name: index_round_candidacies_on_candidacy_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2896,6 +2980,13 @@ CREATE TRIGGER party_registration_insert_frozen BEFORE INSERT ON public.election
 
 
 --
+-- Name: report_versions report_version_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER report_version_immutable BEFORE DELETE OR UPDATE ON public.report_versions FOR EACH ROW EXECUTE FUNCTION public.protect_report_versions();
+
+
+--
 -- Name: rounds round_agenda_protected; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3055,6 +3146,14 @@ ALTER TABLE ONLY public.ballots
 
 ALTER TABLE ONLY public.candidates
     ADD CONSTRAINT fk_rails_115ef6c70c FOREIGN KEY (office_id) REFERENCES public.offices(id);
+
+
+--
+-- Name: report_versions fk_rails_16b579a044; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.report_versions
+    ADD CONSTRAINT fk_rails_16b579a044 FOREIGN KEY (election_id) REFERENCES public.elections(id);
 
 
 --
@@ -3274,6 +3373,14 @@ ALTER TABLE ONLY public.votes
 
 
 --
+-- Name: report_versions fk_rails_9d34c69e19; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.report_versions
+    ADD CONSTRAINT fk_rails_9d34c69e19 FOREIGN KEY (previous_version_id) REFERENCES public.report_versions(id);
+
+
+--
 -- Name: voting_release_commands fk_rails_aba10ae0e7; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3458,6 +3565,7 @@ ALTER TABLE ONLY public.voting_release_commands
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261003010000'),
 ('20261002030000'),
 ('20261002020000'),
 ('20261002010000'),
