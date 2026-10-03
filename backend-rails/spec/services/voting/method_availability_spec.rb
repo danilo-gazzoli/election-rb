@@ -127,5 +127,11 @@ RSpec.describe 'Voting method availability' do
     before_counts = [TallyRun.count, CastVote.count, AuditEvent.count]
     Voting::RoundResult.call(round: round)
     expect([TallyRun.count, CastVote.count, AuditEvent.count]).to eq(before_counts)
+    report = Voting::PublishReport.call(election: election, actor: creator, now: round.grace_until + 2.seconds)
+    public_contest = report.content.fetch('rounds').first.fetch('contests').first
+    expect(public_contest.fetch('result')).to eq(run.totals)
+    expect(public_contest.fetch('legends')).to include(
+      a_hash_including('party_id' => candidates.first.principal_party_id, 'votes' => 1)
+    )
   end
 end
