@@ -18,10 +18,21 @@ module Voting
     end
 
     def call
-      authorize!
+      return open_locked_round unless @round.number == 2
+
+      first = Round.find_by(election_id: @round.election_id, number: 1)
+      return open_locked_round unless first
+
+      # Keep the source stable through opening, using the same lock order as preparation.
+      first.with_lock { open_locked_round }
+    end
+
+    private
+
+    def open_locked_round
       @round.with_lock do
+        authorize!
         validate_round!
-        contests = @round.election.contests.order(:position).to_a
         configuration = BallotConfiguration.call(round: @round)
         unless configuration.fetch(:valid)
           raise InvalidConfiguration, configuration.fetch(:issues).map { |issue| issue.fetch(:message) }.join('; ')
@@ -29,20 +40,26 @@ module Voting
         plan = configuration.fetch(:stages)
         snapshot_data = configuration.fetch(:ballot)
         snapshot = ConfigurationSnapshot.create!(
-          round: @round, version: @round.election.configuration_version,
+          round: @round, version: configuration.fetch(:configuration_version),
           canonical_data: snapshot_data, digest: Digest::SHA256.hexdigest(JSON.generate(snapshot_data)),
           created_at: @now
         )
-        round_contests = contests.index_with { |contest| RoundContest.create!(round: @round, contest: contest) }
-        plan.each do |item|
-          VotingStage.create!(round: @round, round_contest: round_contests.fetch(contests.find do |contest|
-            contest.id == item.fetch(:contest_id)
-          end), global_position: item.fetch(:global_position), choice_index: item.fetch(:choice_index))
-        end
-        contests.each do |contest|
-          contest.candidacies.where(state: 'active').find_each do |candidate|
-            RoundCandidacy.create!(round: @round, candidacy: candidate)
+        if @round.number == 1
+          contests = @round.election.contests.order(:position).to_a
+          round_contests = contests.to_h do |contest|
+            [contest.id, RoundContest.create!(round: @round, contest: contest)]
           end
+          contests.each do |contest|
+            contest.candidacies.where(state: 'active').find_each do |candidate|
+              RoundCandidacy.create!(round: @round, candidacy: candidate)
+            end
+          end
+        else
+          round_contests = @round.round_contests.index_by(&:contest_id)
+        end
+        plan.each do |item|
+          VotingStage.create!(round: @round, round_contest: round_contests.fetch(item.fetch(:contest_id)),
+                              global_position: item.fetch(:global_position), choice_index: item.fetch(:choice_index))
         end
         @round.update!(state: 'open')
         AuditEvent.create!(election: @round.election, user: @actor, action: 'round_open',
@@ -50,8 +67,6 @@ module Voting
         snapshot
       end
     end
-
-    private
 
     def authorize!
       return if @actor&.active? && @actor.school_installation_id == @round.election.school_installation_id &&
@@ -65,7 +80,6 @@ module Voting
       raise NotAllowed, 'election is cancelled' if @round.election.reload.canceled?
       raise NotAllowed, 'round is already open or closed' unless %w[draft scheduled].include?(@round.state)
       raise NotAllowed, 'outside opening window' unless @now >= @round.opens_at && @now < @round.closes_at
-      raise InvalidConfiguration, 'second round requires a separate runoff configuration' unless @round.number == 1
     end
 
   end

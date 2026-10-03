@@ -3,7 +3,7 @@
 module Voting
   # One read-only ballot definition shared by preview and round opening.
   class BallotConfiguration
-    IMPLEMENTED_METHODS = %w[simple_majority].freeze
+    IMPLEMENTED_METHODS = %w[simple_majority absolute_majority].freeze
 
     def self.call(round:)
       new(round: round).call
@@ -15,6 +15,8 @@ module Voting
     end
 
     def call
+      return RunoffBallotConfiguration.call(round: @round) if @round.number == 2
+
       validate_timezone
       contests = @round.election.contests.order(:position).to_a
       issue('missing_contests', 'at least one contest is required') if contests.empty?

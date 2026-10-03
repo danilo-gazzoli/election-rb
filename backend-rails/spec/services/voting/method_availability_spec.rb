@@ -33,7 +33,7 @@ RSpec.describe 'Voting method availability' do
     end
   end
 
-  %w[absolute_majority proportional].each do |method|
+  %w[proportional].each do |method|
     it "reports #{method} as unavailable in preview without altering the draft" do
       contest.update!(method: method, seats: 1, choices_per_person: 1)
       version = election.configuration_version
@@ -63,6 +63,19 @@ RSpec.describe 'Voting method availability' do
       expect(RoundCandidacy.where(round: round)).to be_empty
       expect(AuditEvent.count).to eq(0)
     end
+  end
+
+  it 'makes an absolute-majority profile without a vice available with one choice stage' do
+    contest.update!(method: 'absolute_majority', seats: 1, choices_per_person: 1, has_vice: false)
+    preview = Configuration::PreviewElection.call(election: election, actor: creator)
+    expect(preview.fetch(:valid)).to be(true)
+    snapshot = Voting::OpenRound.call(round: round, actor: creator)
+    expect(round.reload.state).to eq('open')
+    expect(snapshot.canonical_data.fetch('contests').first)
+      .to include('method' => 'absolute_majority', 'has_vice' => false, 'choices_per_person' => 1)
+    expect(VotingStage.where(round: round).count).to eq(1)
+    expect(snapshot.canonical_data.fetch('contests').first.fetch('candidacies'))
+      .to all(satisfy { |candidate| !candidate.key?('vice_person') && !candidate.key?('vice_party_id') })
   end
 
   it 'keeps the implemented simple-majority profile available irrespective of the office name' do
