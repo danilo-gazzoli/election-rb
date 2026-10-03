@@ -34,6 +34,8 @@ module Voting
                      { status: 'pending', reason: 'reconciliation differs by stage' }
                    elsif contest.method == 'simple_majority'
                      SimpleMajorityTally.call(round_contest: round_contest)
+                   elsif contest.method == 'absolute_majority'
+                     AbsoluteMajorityTally.call(round_contest: round_contest)
                    else
                      { status: 'pending', reason: 'tally method is not implemented' }
                    end

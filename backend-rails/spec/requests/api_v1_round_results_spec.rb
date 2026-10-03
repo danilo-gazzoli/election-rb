@@ -73,7 +73,13 @@ RSpec.describe 'API v1 closed round results', type: :request do
         'status' => 'final', 'round_number' => 1, 'contests' => [{
           'contest_id' => contest.id, 'contest_name' => contest.name, 'status' => 'final',
           'rule_version' => stored.algorithm_version, 'input_digest' => stored.input_digest,
-          'result' => stored.totals
+          'result' => stored.totals,
+          'candidates' => contest.candidacies.order(:id).map do |candidate|
+            { 'id' => candidate.id, 'number' => candidate.ballot_number, 'name' => candidate.principal_person.name,
+              'principal_person' => { 'id' => candidate.principal_person_id, 'name' => candidate.principal_person.name },
+              'principal_party' => { 'id' => candidate.principal_party_id, 'number' => candidate.principal_party.party_number.to_s,
+                                     'name' => candidate.principal_party.name, 'abbreviation' => candidate.principal_party.abbreviation } }
+          end
         }]
       )
     end

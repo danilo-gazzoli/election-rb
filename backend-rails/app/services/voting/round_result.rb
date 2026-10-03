@@ -16,10 +16,23 @@ module Voting
         raise NotAvailable, 'Recorded tally is not available' if
           items.empty? || items.any? { |item| !runs.key?(item.id) }
 
+        snapshot = ConfigurationSnapshot.find_by(round_id: round.id)
+        raise NotAvailable, 'Frozen ballot is not available' unless snapshot
+
+        ballot = snapshot.canonical_data
+        catalog = ballot.fetch('contests').index_by { |contest| contest.fetch('id') }
+        parties = ballot.fetch('parties').index_by { |party| party.fetch('id') }
         contests = items.map do |item|
           run = runs.fetch(item.id)
-          { contest_id: item.contest_id, contest_name: item.contest.name, status: run.state,
-            rule_version: run.algorithm_version, input_digest: run.input_digest, result: run.totals }
+          frozen_contest = catalog.fetch(item.contest_id)
+          candidates = frozen_contest.fetch('candidacies').sort_by { |candidate| candidate.fetch('id') }.map do |candidate|
+            { id: candidate.fetch('id'), number: candidate.fetch('number'),
+              name: candidate.fetch('principal_person').fetch('name') }
+              .merge(FrozenCandidateIdentity.call(candidate: candidate, parties: parties))
+          end
+          { contest_id: item.contest_id, contest_name: frozen_contest.fetch('name'), status: run.state,
+            rule_version: run.algorithm_version, input_digest: run.input_digest, result: run.totals,
+            candidates: candidates }
         end
         { status: contests.all? { |item| item.fetch(:status) == 'final' } ? 'final' : 'pending',
           round_number: round.number, contests: contests }

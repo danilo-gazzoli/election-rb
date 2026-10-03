@@ -48,7 +48,7 @@ RSpec.describe 'API v1 public partial results', type: :request do
       total_votes administrative_null_votes stages candidates contest_id contest_name
     ])
     result.fetch('candidates').each do |candidate|
-      expect(candidate.keys).to match_array(%w[candidacy_id name ballot_number votes percentage])
+      expect(candidate.keys).to match_array(%w[candidacy_id name ballot_number votes percentage principal_person principal_party])
     end
     result.fetch('stages').each do |stage|
       expect(stage.keys).to match_array(%w[

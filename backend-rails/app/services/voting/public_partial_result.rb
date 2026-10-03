@@ -14,6 +14,7 @@ module Voting
                                                           !round.election.reload.canceled?
 
         snapshot = ConfigurationSnapshot.find_by!(round_id: round.id)
+        parties = snapshot.canonical_data.fetch('parties').index_by { |party| party.fetch('id') }
         catalog = snapshot.canonical_data.fetch('contests').index_by { |contest| contest.fetch('id') }
         contests = round.round_contests.includes(:contest).sort_by { |item| item.contest.position }.map do |item|
           frozen_contest = catalog.fetch(item.contest_id)
@@ -23,6 +24,7 @@ module Voting
             identity = candidacies.fetch(candidate.fetch(:candidacy_id))
             candidate.merge(name: identity.fetch('principal_person').fetch('name'),
                             ballot_number: identity.fetch('number'))
+                     .merge(FrozenCandidateIdentity.call(candidate: identity, parties: parties))
           end
           totals.merge(contest_id: item.contest_id, contest_name: frozen_contest.fetch('name'),
                        candidates: candidates)
