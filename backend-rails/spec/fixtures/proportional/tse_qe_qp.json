@@ -1,0 +1,18 @@
+{
+  "sources": [
+    "https://www.tse.jus.br/servicos-eleitorais/glossario/termos/quociente-eleitoral",
+    "https://www.tse.jus.br/servicos-eleitorais/glossario/termos/quociente-partidario"
+  ],
+  "verified": "2026-10-03",
+  "scope": "Historical arithmetic reference for QE/QP only. D was a historical coalition; mapped to a standalone test unit, not permission for coalitions in 2026. The sources do not specify nominal/legend breakdown or candidate rankings, so totals are supplied as legend for this arithmetic test only.",
+  "seats": 9,
+  "blank_votes": 300,
+  "null_votes": 250,
+  "parties": [
+    { "id": 1, "legend_votes": 1900 },
+    { "id": 2, "legend_votes": 1350 },
+    { "id": 3, "legend_votes": 550 },
+    { "id": 4, "legend_votes": 2250 }
+  ],
+  "expected": { "valid_votes": 6050, "qe": 672, "qp": [2, 2, 0, 3] }
+}
