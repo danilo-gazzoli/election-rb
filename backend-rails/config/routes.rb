@@ -47,6 +47,7 @@ Rails.application.routes.draw do
       get 'public/elections/:id/partial', to: 'public/elections#partial'
       get 'public/elections/:id/report', to: 'public/elections#report'
       get 'health', to: 'health#show'
+      get 'readiness', to: 'health#readiness'
       match '*unmatched', to: 'errors#not_found', via: :all
     end
   end

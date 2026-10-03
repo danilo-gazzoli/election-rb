@@ -38,6 +38,10 @@ jobs:
           ruby-version: '3.2.0'
           bundler-cache: true
           working-directory: backend-rails
+      - name: Install PostgreSQL recovery tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y postgresql-client
       # db:prepare may load schema.rb and hide a broken migration history.
       - name: Migrate an empty database
         run: bundle exec rails db:migrate

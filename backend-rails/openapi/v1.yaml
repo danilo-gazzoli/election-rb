@@ -80,6 +80,33 @@ x-websocket-channels:
       or missing Origin is rejected. Separate frontend source/deployment must
       expose API and WebSocket through the same origin with credentialed cookies.
 paths:
+  /api/v1/readiness:
+    get:
+      operationId: getDatabaseReadiness
+      summary: Check whether the API can reach its database
+      x-implementation-status: implemented
+      x-authentication: public
+      description: >-
+        Read-only database connectivity probe for deployment and recovery.
+        Returns database_unavailable with HTTP 503 when the database cannot be reached.
+        Unlike /api/v1/health liveness, a ready response requires a database query;
+        it does not certify reconciliation, election validity or school pilot acceptance.
+      responses:
+        '200':
+          description: Database query succeeded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ready]}
+        '503':
+          description: Database unavailable; no credentials or connection details are returned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
   /api/v1/admin/elections/{id}/publish:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
