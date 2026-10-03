@@ -1,0 +1,3124 @@
+openapi: 3.0.3
+info:
+  title: School Election API
+  version: 1.0.0
+  description: >-
+    Versioned JSON contract for the separate frontend. Operations marked planned
+    are design targets, not available routes. Their payloads remain draft until
+    the corresponding feature is implemented and covered by request tests.
+servers:
+  - url: /
+x-user-session:
+  absolute_timeout_seconds: 28800
+  renew_on_activity: false
+  cookie:
+    http_only: true
+    same_site: Lax
+    secure_in_production: true
+  description: >-
+    Opaque session cookie; obtain the CSRF token through GET /api/v1/auth/session
+    and send X-CSRF-Token with every mutation. Login resets the session and token.
+    The eight-hour deadline belongs to the operator, not the anonymous voter.
+    Logout clears the current browser session; it does not revoke every copied
+    cookie or disconnect all previously opened operator sockets.
+x-rate-limit-policy:
+  algorithm: fixed-window
+  storage: postgresql
+  description: >-
+    Counts attempts before executing a command, including unsuccessful attempts.
+    Identities are stored as keyed digests. Reads are not counted. Authenticated
+    operator and device quotas are independent of IP quotas. Retry the same
+    confirmation command_key after Retry-After; never invent another vote.
+x-websocket-channels:
+  VotingDeviceChannel:
+    authentication: voting-device-credential
+    scope: device
+    message_schema: '#/components/schemas/OperationalStateChanged'
+    description: >-
+      Uses the paired cookie. The credential is checked on subscription and before
+      transmission. Rotation attempts to disconnect existing device connections;
+      if that transport fails, subsequent transmissions still recheck the digest.
+  PollworkerChannel:
+    authentication: user-session
+    roles: [creator, pollworker]
+    scope: election
+    subscription_parameters: [election_id]
+    message_schema: '#/components/schemas/OperationalStateChanged'
+    description: >-
+      Requires the same school and an active election role. Session deadline,
+      active account and role are checked on subscription and before transmission.
+      Notifications request an authorized HTTP refresh; they contain no choices
+      or session identifiers. Device cookies take priority when both identities
+      are present; use separate browser contexts for operator and voting device.
+  PublicResultsChannel:
+    authentication: public
+    scope: election
+    connect_path: /cable?audience=public
+    x-implementation-status: implemented
+    subscription_parameters: [election_id]
+    message_schema: '#/components/schemas/PublicResultsChanged'
+    description: >-
+      Explicit public mode ignores user and device cookies and grants no private
+      channel access. Subscription requires an open or suspended election round.
+      Refresh hints are sent after commit for confirmed votes, administrative
+      nulls from abandonment, closure and annulment. Releases, warnings and
+      confirmation replays do not emit a public refresh. Messages contain only
+      the election identity and opaque revision, never choices or arrival times.
+      Fetch GET /api/v1/public/elections/{id}/partial over HTTP after a message
+      and after reconnecting; notifications are best effort and may be missed.
+      Compare revisions for equality, not ordering. A terminal invalidation
+      requests a refetch returning not_available; it does not publish a public
+      report or elected candidates. Explicit publication sends a hint to existing subscriptions
+      with the report input_digest; refetch GET /api/v1/public/elections/{id}/report
+      after publication or reconnecting to a closed election. Origin must match the application origin.
+  transport:
+    protocol: action-cable
+    path: /cable
+    origin: same-origin
+    description: >-
+      An adapter must implement the Action Cable subscription envelope. Foreign
+      or missing Origin is rejected. Separate frontend source/deployment must
+      expose API and WebSocket through the same origin with credentialed cookies.
+paths:
+  /api/v1/readiness:
+    get:
+      operationId: getDatabaseReadiness
+      summary: Check whether the API can reach its database
+      x-implementation-status: implemented
+      x-authentication: public
+      description: >-
+        Read-only database connectivity probe for deployment and recovery.
+        Returns database_unavailable with HTTP 503 when the database cannot be reached.
+        Unlike /api/v1/health liveness, a ready response requires a database query;
+        it does not certify reconciliation, election validity or school pilot acceptance.
+      responses:
+        '200':
+          description: Database query succeeded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ready]}
+        '503':
+          description: Database unavailable; no credentials or connection details are returned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/admin/elections/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: publishElectionReport
+      summary: Publish an immutable final report version
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      description: >-
+        Requires the active creator role in the same school, a CSRF token, all rounds
+        closed, reconciliation and reproducible recorded tallies. Pending, annulled,
+        missing or divergent outcomes return report_not_ready. The same aggregate
+        content replays the same version without another audit or notification.
+        Changed aggregate occurrences create a new version preserving earlier versions.
+        A public refresh hint is sent after commit; transport failure cannot undo publication.
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: A new report version was committed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublishedReport'}
+        '200':
+          description: The same previously published version is returned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublishedReport'}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '403': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '409':
+          description: report_not_ready; no report version is created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/AuthenticationUnavailable'}
+
+  /api/v1/public/elections/{id}/report:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      operationId: getPublishedElectionReport
+      summary: Read the current or a historical public report
+      x-implementation-status: implemented
+      x-authentication: public
+      description: >-
+        Read-only aggregate publication; never recalculates or writes votes, tallies
+        or audit. Omit version for the latest report. Returns pending with a reason
+        before publication or while a round remains unclosed. Cancellation returns
+        annulled without winners, including for historical requests; stored versions
+        remain intact. No voter identity, individual ballot, session, receipt,
+        credential, operational timestamp or free-text occurrence is exposed.
+        input_digest is the opaque revision announced to existing public subscriptions.
+      parameters:
+        - name: version
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Published version or a pending or annulled status with its reason
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/PublishedReport'
+                  - $ref: '#/components/schemas/ReportStatus'
+        '404':
+          description: not_found election or report_not_found version
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/v1/health:
+    get:
+      operationId: getApiHealth
+      summary: Report API liveness and version
+      description: Liveness only; this response does not certify database readiness.
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: API process is responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /api/v1/auth/session:
+    get:
+      operationId: getUserSession
+      summary: Read the current user session and CSRF token
+      x-implementation-status: implemented
+      x-authentication: optional-user-session
+      responses:
+        '200':
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/auth/login:
+    post:
+      operationId: loginUser
+      summary: Authenticate a creator or poll worker
+      x-implementation-status: implemented
+      x-authentication: anonymous-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      x-rate-limits:
+        - {scope: login_account, identity: account, attempts: 10, window_seconds: 900}
+        - {scope: login_ip, identity: ip, attempts: 30, window_seconds: 900}
+      responses:
+        '200':
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutUser
+      summary: End the current user session
+      x-implementation-status: implemented
+      x-authentication: user-session-with-csrf
+      responses:
+        '204':
+          description: Session ended
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/parties:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listElectionParties
+      summary: List parties participating in the creator's election
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Election party catalog with canonical ballot numbers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parties]
+                properties:
+                  parties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Party'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElectionParty
+      summary: Create a party and its election registration atomically
+      description: >-
+        Requires a creator role in this election. Creates an election-owned
+        record and an audit event. Abbreviation and number are unique within
+        this election. Rejects changes after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Party and registration persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/parties/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateElectionParty
+      summary: Edit an owned draft party and synchronize its registration
+      description: >-
+        Accepts partial party attributes. Requires ownership by this election
+        and a creator role. Party, registration and audit event are updated
+        atomically. Rejects changes after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Updated party
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+    delete:
+      operationId: deleteElectionParty
+      summary: Delete an unused owned draft party and its registration
+      description: >-
+        Requires a creator role. Returns 409 when the catalog is frozen or
+        election data reference the party. An audit event survives successful
+        deletion; a failure rolls back the complete command.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Party and registration deleted with an audit event
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/federations:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      operationId: listElectionFederations
+      summary: List election federations
+      description: >-
+        Requires an active creator role in this election and the same school. Read only; ordered by federation ID with sorted party IDs. No CSRF header is required for this read.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: List election federations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElectionFederation
+      summary: Create a federation and its members atomically
+      description: >-
+        Requires a creator session and CSRF header. Name is required; state defaults to active. Active federations require at least two distinct registered parties. Each party can belong to only one federation in this election. Inactive federations may have fewer members. Metadata, membership, configuration version and audit are committed together. Protected identifiers are ignored. Returns 422 invalid_configuration for invalid membership and 409 configuration_locked after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Create a federation and its members atomically
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        '400':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/federations/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    patch:
+      operationId: updateElectionFederation
+      summary: Edit draft federation metadata and composition
+      description: >-
+        Requires a creator session and CSRF header. Accepts partial metadata; omitted party_ids preserve current membership, while provided party_ids replace it atomically. Active federations require at least two distinct registered parties, exclusive within this election. Metadata, membership, version and audit share one transaction. Protected identifiers are ignored. Returns 422 invalid_configuration for invalid composition and 409 configuration_locked after any round opens.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit draft federation metadata and composition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        '400':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+    delete:
+      operationId: deleteElectionFederation
+      summary: Delete a draft federation while preserving parties
+      description: >-
+        Requires a creator session and CSRF header. Removes this federation and its memberships, preserving parties and candidacies. Deletion, configuration version and attributable audit are atomic. Returns 409 configuration_locked after any round opens, or federation_in_use for protected references.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Delete a draft federation while preserving parties
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/contests:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listContests
+      summary: List ordered contests and candidacies
+      description: Requires an active creator role in this election and the same school. Read only; ordered by configured position. Reads do not require a CSRF header.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: List ordered contests and candidacies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createContest
+      summary: Create a draft contest and affiliated candidacies atomically
+      description: >-
+        Requires a creator role in this election and registered parties.
+        Rejects configuration after a round opens. The server determines the
+        election and rule version; clients cannot override these fields.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContestConfigurationRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Contest and candidacies persisted with an audit event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/contests/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getContest
+      summary: Read a contest and its candidature identities
+      description: Requires an active creator role in this election and the same school. Read only; ordered by configured position. Reads do not require a CSRF header.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      responses:
+        '200':
+          description: Read a contest and its candidature identities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+    patch:
+      operationId: updateContest
+      summary: Edit a draft contest
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContestUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit a draft contest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContestResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+    delete:
+      operationId: deleteContest
+      summary: Remove an empty draft contest
+      description: Requires creator and CSRF. Configuration is locked after opening. contest_in_use returns 409 when candidacies or election data reference the contest; no implicit cascade. Deletion, version and audit commit atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Remove an empty draft contest
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/contests/{contest_id}/candidacies:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: contest_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createCandidacy
+      summary: Create an affiliated candidacy or slate
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored. Principal and vice parties must be registered in this election. A slate requires vice_name and vice_party_id when the contest has_vice is true; parties may differ. Number is unique within the contest.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidacyCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Create an affiliated candidacy or slate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidacyWriteResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/contests/{contest_id}/candidacies/{id}:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: contest_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateCandidacy
+      summary: Edit an affiliated candidacy or slate
+      description: Requires an active creator role and CSRF token. Rejects changes after any round opens; invalid_configuration returns 422. Changes, version increment and operational audit commit atomically. Protected identifiers and state are ignored. Omitted fields are preserved. Cannot clear a required vice or provide vice_name without an existing vice. candidate_person_in_use returns 409 when renaming a person referenced by another candidacy. Person identifiers remain unchanged.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidacyUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Edit an affiliated candidacy or slate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidacyWriteResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '422':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+    delete:
+      operationId: deleteCandidacy
+      summary: Remove an unused draft candidacy
+      description: Requires creator and CSRF. Configuration is locked after opening. Deletes people only when no other candidacy references them as principal or vice; preserves the contest and parties. candidacy_in_use returns 409 for protected references. Deletion, version and audit commit atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '204':
+          description: Remove an unused draft candidacy
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          $ref: '#/components/responses/ApiError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections:
+    get:
+      operationId: listElections
+      summary: List elections with an active creator role in the current school
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Election configurations visible to this user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [elections]
+                properties:
+                  elections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+    post:
+      operationId: createElection
+      summary: Atomically create a draft election, agenda, creator role and audit
+      description: >-
+        Requires an active account provisioned with can_create_elections.
+        School and creator are derived from the authenticated user.
+        The first-round grace period is ten minutes; all records roll back
+        when any input is invalid. This API cannot grant creation permission.
+      x-implementation-status: implemented
+      x-authentication: provisioned-creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectionCreateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Draft election configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getElection
+      summary: Read an election configuration and its first-round agenda
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Election configuration with authoritative round state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        default:
+          $ref: '#/components/responses/ApiError'
+    patch:
+      operationId: updateElection
+      summary: Atomically edit draft metadata and first-round agenda
+      description: >-
+        Requires a creator role and the current integer configuration_version.
+        Stale versions return 409 stale_configuration. An opened, suspended,
+        closed or annulled round returns 409 configuration_locked. The agenda,
+        legacy calendar fields, version and audit event change atomically.
+        Changes to parties and contests also increment this version.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectionUpdateRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Updated election with its new configuration version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{id}/preview:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: previewElection
+      summary: Validate the ballot before opening a round
+      description: Read-only configuration check, including future schedules. Opening still enforces its time window. Invalid ballots return all identified issues and empty stages, without a snapshot or state change.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Ordered stages and configuration problems
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElectionPreview'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/rounds/{id}/runoff:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: prepareRunoff
+      summary: Prepare only the unresolved absolute majority contests for round two
+      description: >-
+        Requires the active election creator and a closed, reconciled first round with
+        a frozen ballot and matching recorded tally. Opens on a later local day using
+        the first ballot timezone, after its grace deadline, with a future opening and
+        closing after opening. Only two unambiguously qualified slates per unresolved
+        contest are retained. The same calendar replays the prepared round without
+        creating another round or audit; a different calendar conflicts. First-round
+        votes and winners are preserved and are never transferred to the second round.
+        Preparation does not open voting; use the existing open operation at its window.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunoffPreparationRequest'
+      responses:
+        '201':
+          description: New scheduled second round and qualified contests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunoffPreparationResult'
+        '200':
+          description: Replay of the existing round with the same calendar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunoffPreparationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: runoff_conflict for a different prepared calendar; runoff_prepare_denied for an unavailable source round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_runoff_calendar or invalid_runoff_configuration; no round is prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/rounds/{id}/open:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: openRound
+      summary: Freeze a valid round configuration and open consecutive voting stages
+      description: >-
+        simple_majority, absolute_majority and proportional are available. Proportional
+        contests require proporcional_br_2026_v1; unsupported versions are rejected
+        before opening. Round two must be prepared from a closed, reconciled first round; opening
+        freezes only its qualified contests and slates with a new calendar and stages.
+      x-available-methods: [simple_majority, absolute_majority, proportional]
+      x-unavailable-methods: []
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Opened round state, snapshot digest and ordered stages
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/rounds/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: suspendRound
+      summary: Suspend voting while preserving confirmed votes and session progress
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        New releases and confirmations are blocked. Previously committed confirmations
+        remain recoverable. State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Suspended round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_suspend_denied; the round is not open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/rounds/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: resumeRound
+      summary: Resume the same ballot within the original voting schedule
+      description: >-
+        Requires an active creator of this election and a nonblank textual reason.
+        Only a suspended round can resume, from opens_at inclusive until grace_until
+        exclusive. The original schedule is not extended. After closes_at, only
+        sessions already started can continue; new releases and starts remain blocked.
+        State, incident and operational audit are persisted atomically.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Resumed round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_resume_denied; incompatible state or original grace period ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/rounds/{id}/annul:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: annulRound
+      summary: Annul a round with explicit confirmation and a reason
+      description: >-
+        Requires an active creator of this election, a nonblank textual reason
+        and confirmed equal to the JSON boolean true. Any nonannulled round can
+        be annulled. Cancels active sessions and locks their devices without
+        generating votes. Preserves votes, receipts, frozen configuration and
+        historical tallies for audit. Marks the election cancelled. An annulled
+        round cannot declare a winner or be reopened. Audit and operational
+        state are persisted atomically. Repeating annulment returns a conflict.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundAnnulmentRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Annulled round; no winner is declared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundTransitionResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: round_annul_denied; round is already annulled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason or confirmation_required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/rounds/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: closeRound
+      summary: Close after the grace period and persist reconciled tallies
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Closed round and final or pending tally states
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/pollworker/rounds/{round_id}/voting-devices:
+    parameters:
+      - name: round_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listPollworkerVotingDevices
+      summary: Consult operational device state for an election round
+      description: >-
+        Read-only consultation requiring an active pollworker role in this election
+        and school. Lists school devices in ascending id order, with only the active
+        session of the requested round and that session's incident ids and kinds.
+        Does not start a session or change participation, votes or audit.
+        Choices, receipts and credentials are never returned. Refresh this endpoint
+        after a private pollworker state_changed notification or reconnection.
+      x-implementation-status: implemented
+      x-authentication: poll-worker-session
+      responses:
+        '200':
+          description: Operational school device catalog for this round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollworkerDeviceCatalog'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/pollworker/voting-devices/{id}/release:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: releaseVotingDevice
+      summary: Release one anonymous voting session after physical identity check
+      description: >-
+        Requires an active pollworker role in the election and school, and CSRF.
+        Generate a command_key for each release intent and reuse the same command_key
+        for retries on the same device. Replays return the original session and its
+        current state, including completed, abandoned or cancelled, with no new session,
+        audit or notification. An old command never releases the next voter.
+        Keys are scoped to the device; reuse for another round is a conflict.
+        A new release requires an open round within its release window.
+        The key is an operational retry identifier, not a voter credential.
+      x-implementation-status: implemented
+      x-authentication: poll-worker-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VotingDeviceReleaseRequest'
+      responses:
+        '200':
+          description: Original operational session identity and current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VotingDeviceSession'
+        '400':
+          description: invalid_command_key; key is missing, blank, not a string or longer than 128 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: release_command_conflict for reuse in another round, or release_denied for an unavailable new release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/pollworker/sessions/{id}/abandon:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: abandonVotingSession
+      summary: Resolve a formally abandoned session without changing confirmed votes
+      description: >-
+        Requires an active pollworker or creator role in the election and school,
+        and a nonblank textual reason. Confirmed votes and receipts are preserved.
+        Started sessions receive administrative nulls only for remaining stages.
+        Unstarted releases are cancelled without votes. The operator, reason,
+        time and remaining stage identifiers are recorded atomically without choices.
+        Repeating a closure does not duplicate votes or evidence. A connection failure
+        does not call this command automatically. New abandonment is forbidden in
+        a cancelled election.
+      x-implementation-status: implemented
+      x-authentication: operator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Original or newly committed session closure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionClosureResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: abandon_denied; completed session or cancelled election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; absent, blank or nontextual reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/voting-device/state:
+    get:
+      operationId: getVotingDeviceState
+      summary: Recover authoritative voting device state after release or reconnection
+      x-implementation-status: implemented
+      x-authentication: voting-device-credential
+      responses:
+        '200':
+          description: Voting device state without a previously confirmed choice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VotingDeviceState'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/voting-device/confirmations:
+    post:
+      operationId: confirmVote
+      summary: Confirm exactly one voting stage
+      description: >-
+        New confirmations are forbidden while suspended, closed, annulled or
+        when the election is cancelled. A paired device may recover an exact
+        previously committed command from its latest completed session or a
+        session cancelled by annulment without creating another vote.
+      x-implementation-status: implemented
+      x-authentication: voting-device-credential-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmationIntent'
+      x-rate-limits:
+        - {scope: device_confirmations, identity: device, attempts: 120, window_seconds: 60}
+      responses:
+        '200':
+          description: Durable confirmation or idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmationReceipt'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/rounds/{id}/results:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      operationId: getRecordedRoundResults
+      summary: Read recorded tallies as the election creator
+      description: >-
+        Requires an active creator role in the election and school. Reads the recorded
+        TallyRun results only after closure, preserving final or pending outcomes,
+        rule version and input digest. Does not recalculate, does not publish a public
+        report, and does not change votes, audit or tallies. Rejects open, annulled or
+        cancelled elections and incomplete recorded tallies. Public report publication
+        remains a separate command. No session, device, receipt or individual vote metadata.
+      x-implementation-status: implemented
+      x-authentication: creator-session
+      responses:
+        '200':
+          description: Recorded aggregate results, final only when every contest is final
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordedRoundResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: result_not_available; round is not eligible or a recorded contest tally is missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/public/elections/{id}/partial:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      operationId: getPartialResults
+      summary: Read aggregate partial counts without a winner
+      description: >-
+        Anonymous, read-only counts for the latest open or suspended round. Includes
+        only committed votes and started participation; a release or unconfirmed
+        warning does not count as a vote. Never declares elected candidates.
+        Names and ballot numbers come from the opened snapshot. Blank and null votes
+        are outside the valid denominator; proportional legend votes are inside it.
+        Live percentages may allow observers to infer a recent choice in small groups;
+        the installation must explain this limitation. No session, device, receipt,
+        arrival order or individual vote timestamp is returned. Closed, annulled,
+        cancelled or unopened ballots are not live partials. Final public reports
+        require separate publication.
+      x-implementation-status: implemented
+      x-authentication: public
+      responses:
+        '200':
+          description: Aggregate partial results without a winner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPartialResult'
+        '404':
+          description: not_found for an unknown election or opened snapshot; not_available without an active eligible round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/voting-device/pair:
+    post:
+      operationId: pairVotingDevice
+      summary: Consume a one-time code and rotate the opaque device cookie
+      description: >-
+        Codes expire after ten minutes and can be consumed once. Invalid or expired
+        codes return 401 invalid_pairing. A successful pair invalidates the old
+        credential and restores an unavailable device to locked. Credentials are
+        never returned in JSON. Obtain CSRF through the user session endpoint.
+      x-implementation-status: implemented
+      x-authentication: anonymous-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairing_code]
+              properties:
+                pairing_code:
+                  type: string
+      x-rate-limits:
+        - {scope: pair_ip, identity: ip, attempts: 20, window_seconds: 600}
+      responses:
+        '200':
+          description: Device paired; an encrypted HttpOnly cookie is issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state]
+                properties:
+                  state:
+                    type: string
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/voting-devices:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: createVotingDevice
+      summary: Register a school device and issue its first one-time pairing code
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_label]
+              properties:
+                public_label:
+                  type: string
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '201':
+          description: Device created; pairing code is valid for ten minutes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, public_label, pairing_code]
+                properties:
+                  id:
+                    type: integer
+                  public_label:
+                    type: string
+                  pairing_code:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+        default:
+          $ref: '#/components/responses/ApiError'
+
+  /api/v1/admin/elections/{election_id}/voting-devices/{id}/revoke:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: revokeVotingDeviceAccess
+      summary: Revoke a school device credential with an audited reason
+      description: >-
+        Requires an active creator role in the election and a device from the
+        same school. Invalidates its credential and pending pairing code, marks
+        it unavailable and records the reason atomically. Refuses active voting
+        sessions. A transport failure cannot undo the committed revocation.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundTransitionRequest'
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Credential revoked; no secrets are returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAccessResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: device_busy; an active voting session must finish first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_reason; a nonblank textual reason is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+  /api/v1/admin/elections/{election_id}/voting-devices/{id}/pairing-code:
+    parameters:
+      - name: election_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: renewVotingDevicePairingCode
+      summary: Issue a new one-time code for an existing school device
+      description: >-
+        Requires an active creator role and a device from the same school, without
+        an active voting session. Invalidates the old credential and pending code,
+        marks unavailable and audits renewal without storing the plaintext code.
+        The new code expires in ten minutes. A successful pair restores locked.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      responses:
+        '200':
+          description: Pairing code returned once to the authorized creator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePairingCodeResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: device_busy; an active voting session must finish first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ApiError:
+      description: Stable JSON error; the HTTP status identifies the failure class
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: invalid_csrf_token or forbidden; command is not executed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: rate_limited; attempt quota exceeded before command execution
+      headers:
+        Retry-After:
+          description: Seconds until the fixed window resets
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AuthenticationUnavailable:
+      description: >-
+        authentication_unavailable; the attempt limiter cannot access its storage.
+        The command is not executed. This response does not describe every possible
+        database outage elsewhere in the application.
+      headers:
+        Retry-After:
+          description: Suggested seconds before retrying
+          schema:
+            type: integer
+            minimum: 1
+            example: 5
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    PublicResultsChanged:
+      type: object
+      additionalProperties: false
+      required: [event, election_id, revision]
+      properties:
+        event:
+          type: string
+          enum: [results_changed]
+        election_id:
+          type: integer
+        revision:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque equality token for a public aggregate or unavailability; not a vote sequence or timestamp. Retrieve current state by HTTP.
+    OperationalStateChanged:
+      type: object
+      additionalProperties: false
+      required: [event]
+      properties:
+        event:
+          type: string
+          enum: [state_changed]
+    DeviceAccessResult:
+      type: object
+      required: [id, state]
+      properties:
+        id:
+          type: integer
+        state:
+          type: string
+          enum: [unavailable]
+    DevicePairingCodeResult:
+      type: object
+      required: [id, state, pairing_code, pairing_expires_at]
+      properties:
+        id:
+          type: integer
+        state:
+          type: string
+          enum: [unavailable]
+        pairing_code:
+          type: string
+          description: One-time secret; never log or persist on the client
+        pairing_expires_at:
+          type: string
+          format: date-time
+          description: UTC expiry of the ten-minute pairing window
+    PartyAttributes:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 10
+          maxLength: 50
+        abbreviation:
+          type: string
+          minLength: 2
+          maxLength: 8
+          pattern: '^[A-Z]+$'
+        ballot_number:
+          type: string
+          pattern: '^(0[1-9]|[1-9][0-9])$'
+          description: Canonical two-digit number from 01 through 99.
+        description:
+          type: string
+          nullable: true
+          minLength: 15
+          maxLength: 500
+    Party:
+      allOf:
+        - $ref: '#/components/schemas/PartyAttributes'
+        - type: object
+          required: [id, name, abbreviation, ballot_number]
+          properties:
+            id:
+              type: integer
+    PartyCreateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          type: object
+          required: [name, abbreviation, ballot_number]
+          allOf:
+            - $ref: '#/components/schemas/PartyAttributes'
+    PartyUpdateRequest:
+      type: object
+      required: [party]
+      properties:
+        party:
+          $ref: '#/components/schemas/PartyAttributes'
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: not_found
+            message:
+              type: string
+              example: Resource not found
+            details:
+              type: array
+              items:
+                type: object
+    Health:
+      type: object
+      required: [status, api_version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        api_version:
+          type: string
+          enum: [v1]
+    UserSession:
+      type: object
+      required: [user, csrf_token]
+      properties:
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            login:
+              type: string
+        csrf_token:
+          type: string
+          description: Provided for same-origin mutating requests; never a login credential.
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+          format: password
+    ContestUpdateRequest:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          type: object
+          description: Partial update; omitted fields are preserved and protected fields are ignored.
+          properties:
+            name: {type: string}
+            position: {type: integer, minimum: 1}
+            method: {type: string, enum: [simple_majority, absolute_majority, proportional]}
+            seats: {type: integer, minimum: 1}
+            choices_per_person: {type: integer, minimum: 1}
+            has_vice: {type: boolean}
+    CandidacyCreateRequest:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          type: object
+          required: [principal_name, principal_party_id, ballot_number]
+          description: A contest with vice requires vice_name and vice_party_id; both parties must be registered in this election.
+          properties:
+            principal_name: {type: string}
+            principal_party_id: {type: integer}
+            ballot_number: {type: string}
+            vice_name: {type: string}
+            vice_party_id: {type: integer}
+    CandidacyUpdateRequest:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          type: object
+          description: Partial update preserving person IDs. Protected fields are ignored; invalid affiliations or removal of a required vice return 422.
+          properties:
+            principal_name: {type: string}
+            principal_party_id: {type: integer}
+            ballot_number: {type: string}
+            vice_name: {type: string}
+            vice_party_id: {type: integer, nullable: true}
+    AdministrationPerson:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    CandidacyIdentity:
+      type: object
+      required: [id, ballot_number, state, principal_person_id, principal_party_id, vice_person_id, vice_party_id]
+      properties:
+        id: {type: integer}
+        ballot_number: {type: string}
+        state: {type: string, enum: [active, withdrawn]}
+        principal_person_id: {type: integer}
+        principal_party_id: {type: integer}
+        vice_person_id: {type: integer, nullable: true}
+        vice_party_id: {type: integer, nullable: true}
+    CandidacyWriteResult:
+      type: object
+      required: [candidacy]
+      properties:
+        candidacy:
+          $ref: '#/components/schemas/CandidacyIdentity'
+    CatalogCandidacy:
+      type: object
+      required: [id, ballot_number, state, principal_party_id, vice_party_id, principal_person, vice_person]
+      properties:
+        id: {type: integer}
+        ballot_number: {type: string}
+        state: {type: string, enum: [active, withdrawn]}
+        principal_party_id: {type: integer}
+        vice_party_id: {type: integer, nullable: true}
+        principal_person:
+          $ref: '#/components/schemas/AdministrationPerson'
+        vice_person:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: {type: integer}
+            name: {type: string}
+    CatalogContest:
+      type: object
+      required: [id, name, position, method, seats, choices_per_person, has_vice, rule_version, candidacies]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        position: {type: integer, minimum: 1}
+        method: {type: string, enum: [simple_majority, absolute_majority, proportional]}
+        seats: {type: integer, minimum: 1}
+        choices_per_person: {type: integer, minimum: 1}
+        has_vice: {type: boolean}
+        rule_version: {type: string}
+        candidacies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogCandidacy'
+    ContestResult:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          $ref: '#/components/schemas/CatalogContest'
+    ContestCatalog:
+      type: object
+      required: [contests]
+      properties:
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogContest'
+    FederationCreateRequest:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+              minLength: 1
+            abbreviation:
+              type: string
+              nullable: true
+            state:
+              type: string
+              enum: [active, inactive]
+            party_ids:
+              type: array
+              uniqueItems: true
+              description: Registered party IDs in this election; active federations require at least two. Omission on update preserves existing membership.
+              items: {type: integer, minimum: 1}
+    FederationUpdateRequest:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          type: object
+          properties:
+            name:
+              type: string
+              minLength: 1
+            abbreviation:
+              type: string
+              nullable: true
+            state:
+              type: string
+              enum: [active, inactive]
+            party_ids:
+              type: array
+              uniqueItems: true
+              description: Registered party IDs in this election; active federations require at least two. Omission on update preserves existing membership.
+              items: {type: integer, minimum: 1}
+    Federation:
+      type: object
+      required: [id, name, abbreviation, state, party_ids]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        abbreviation:
+          type: string
+          nullable: true
+        state:
+          type: string
+          enum: [active, inactive]
+        party_ids:
+          type: array
+          uniqueItems: true
+          description: Party IDs sorted in ascending order; candidate affiliation remains with the party.
+          items: {type: integer, minimum: 1}
+    FederationResult:
+      type: object
+      required: [federation]
+      properties:
+        federation:
+          $ref: '#/components/schemas/Federation'
+    FederationCatalog:
+      type: object
+      required: [federations]
+      properties:
+        federations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Federation'
+    ContestConfigurationRequest:
+      type: object
+      required: [contest]
+      properties:
+        contest:
+          type: object
+          required: [name, position, method, seats, choices_per_person]
+          properties:
+            name:
+              type: string
+            position:
+              type: integer
+              minimum: 1
+            method:
+              type: string
+              enum: [simple_majority, absolute_majority, proportional]
+            seats:
+              type: integer
+              minimum: 1
+            choices_per_person:
+              type: integer
+              minimum: 1
+            has_vice:
+              type: boolean
+              description: When true, each nested candidacy requires vice_name and vice_party_id; both parties must be registered in this election.
+            candidacies:
+              type: array
+              items:
+                type: object
+                required: [principal_name, principal_party_id, ballot_number]
+                properties:
+                  principal_name:
+                    type: string
+                  principal_party_id:
+                    type: integer
+                  ballot_number:
+                    type: string
+                  vice_name:
+                    type: string
+                  vice_party_id:
+                    type: integer
+    ElectionAttributes:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 5
+          maxLength: 100
+        description:
+          type: string
+          minLength: 10
+          maxLength: 200
+        timezone:
+          type: string
+          description: Recognized Rails or IANA timezone, such as America/Sao_Paulo.
+        opens_at:
+          type: string
+          format: date-time
+          description: Future ISO 8601 instant with explicit offset or Z.
+        closes_at:
+          type: string
+          format: date-time
+          description: ISO 8601 instant with explicit offset, strictly after opening.
+        configuration_version:
+          type: integer
+          minimum: 1
+          description: Required on edits; must match the current configuration version.
+    ElectionCreateRequest:
+      type: object
+      required: [election]
+      properties:
+        election:
+          type: object
+          required: [title, description, timezone, opens_at, closes_at]
+          allOf:
+            - $ref: '#/components/schemas/ElectionAttributes'
+    ElectionUpdateRequest:
+      type: object
+      required: [election]
+      properties:
+        election:
+          type: object
+          required: [configuration_version]
+          allOf:
+            - $ref: '#/components/schemas/ElectionAttributes'
+    FirstRoundAgenda:
+      type: object
+      required: [id, number, opens_at, closes_at, grace_until]
+      properties:
+        id:
+          type: integer
+          description: Identifier used by the round opening and closing endpoints.
+        number:
+          type: integer
+          enum: [1]
+        opens_at:
+          type: string
+          format: date-time
+        closes_at:
+          type: string
+          format: date-time
+        grace_until:
+          type: string
+          format: date-time
+          description: Closing instant plus ten minutes.
+    Election:
+      type: object
+      required: [id, title, description, timezone, state, configuration_version, first_round]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+        state:
+          type: string
+          enum: [draft, scheduled, open, suspended, closed, annulled]
+        configuration_version:
+          type: integer
+          minimum: 1
+        first_round:
+          $ref: '#/components/schemas/FirstRoundAgenda'
+    ElectionPreview:
+      type: object
+      required: [valid, configuration_version, issues, ballot, stages]
+      properties:
+        valid:
+          type: boolean
+          description: Configuration validity; does not authorize voting before the opening window.
+        configuration_version:
+          type: integer
+          minimum: 1
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum: [missing_round, missing_contests, invalid_timezone, invalid_rule_version, unsupported_profile, unavailable_method, invalid_federation, insufficient_candidacies, invalid_candidacy, ambiguous_ballot_number, invalid_stage_order]
+              message:
+                type: string
+              contest_id:
+                type: integer
+              candidacy_id:
+                type: integer
+        ballot:
+          type: object
+          nullable: true
+          description: Canonical ballot used by opening, or null for an invalid configuration. Contains round_number, rule_version, schedule, parties, federations and ordered contests with candidate identities and affiliations. Federations contain id, name, optional abbreviation, state and sorted party_ids; active federations require at least two parties. Contains no votes or voting sessions.
+        stages:
+          type: array
+          items:
+            type: object
+            required: [contest_id, global_position, choice_index]
+            properties:
+              contest_id:
+                type: integer
+              global_position:
+                type: integer
+                minimum: 1
+              choice_index:
+                type: integer
+                minimum: 1
+    RoundAnnulmentRequest:
+      type: object
+      required: [reason, confirmed]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Nonblank reason recorded in the operational audit.
+        confirmed:
+          type: boolean
+          enum: [true]
+          description: Explicit confirmation; strings and numeric values are rejected.
+    SessionClosureResult:
+      type: object
+      required: [session_id, state]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [abandoned, cancelled]
+    RoundTransitionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Operational justification; never include a voter identity or choice.
+    RoundTransitionResult:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [open, suspended, annulled]
+    PollworkerDeviceCatalog:
+      type: object
+      additionalProperties: false
+      required: [round_id, devices]
+      properties:
+        round_id:
+          type: integer
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollworkerOperationalDevice'
+    PollworkerOperationalDevice:
+      type: object
+      additionalProperties: false
+      required: [id, public_label, state, session, incidents]
+      properties:
+        id:
+          type: integer
+        public_label:
+          type: string
+        state:
+          type: string
+          enum: [locked, released, in_progress, unavailable]
+          description: Current school device state; session details are limited to the requested round.
+        session:
+          $ref: '#/components/schemas/PollworkerSessionProgress'
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PollworkerIncident'
+    PollworkerSessionProgress:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, state, current_stage_position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [released, in_progress]
+        current_stage_position:
+          type: integer
+    PollworkerIncident:
+      type: object
+      additionalProperties: false
+      required: [id, kind]
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+    VotingDeviceReleaseRequest:
+      type: object
+      required: [round_id, command_key]
+      properties:
+        round_id:
+          type: integer
+        command_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '\S'
+          description: One key per release intent on a device; reuse it for retries, never as a voter credential.
+    VotingDeviceSession:
+      type: object
+      additionalProperties: false
+      required: [session_id, state]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [released, in_progress, completed, abandoned, cancelled]
+    RunoffPreparationRequest:
+      type: object
+      required: [opens_at, closes_at]
+      properties:
+        opens_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$'
+        closes_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$'
+    RunoffPreparationResult:
+      type: object
+      additionalProperties: false
+      required: [source_round_id, round, contests]
+      properties:
+        source_round_id: {type: integer}
+        round:
+          $ref: '#/components/schemas/PreparedRunoffRound'
+        contests:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RunoffContest'
+    PreparedRunoffRound:
+      type: object
+      additionalProperties: false
+      required: [id, number, state, opens_at, closes_at, grace_until]
+      properties:
+        id: {type: integer}
+        number: {type: integer, enum: [2]}
+        state: {type: string, enum: [scheduled, open, suspended, closed, annulled]}
+        opens_at: {type: string, format: date-time}
+        closes_at: {type: string, format: date-time}
+        grace_until: {type: string, format: date-time}
+    RunoffContest:
+      type: object
+      additionalProperties: false
+      required: [contest_id, candidacy_ids]
+      properties:
+        contest_id: {type: integer}
+        candidacy_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items: {type: integer}
+    FrozenPersonIdentity:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    FrozenPartyIdentity:
+      type: object
+      additionalProperties: false
+      required: [id, number, name, abbreviation]
+      properties:
+        id: {type: integer}
+        number: {type: string}
+        name: {type: string}
+        abbreviation: {type: string}
+    FrozenCandidate:
+      type: object
+      additionalProperties: false
+      description: >-
+        Public slate identity from the opened snapshot, with one nominal vote for the
+        whole slate. Vice fields are omitted for contests without a vice. Principal and
+        vice may belong to distinct parties; neither has a separate vote in this slate.
+      required: [id, number, name, principal_person, principal_party]
+      properties:
+        id: {type: integer}
+        number: {type: string}
+        name: {type: string}
+        principal_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        principal_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+        vice_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        vice_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+    AbsoluteMajorityFinal:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded only after closing and reconciliation. In round one, 2 * winner votes
+        must exceed total nominal votes; blank and null votes are excluded. In the second
+        round, the higher own-round nominal total wins. A decisive tie, zero nominal
+        votes or insufficient eligible candidacies remain pending with no invented winner.
+      required: [status, elected_ids, valid_votes, counts]
+      properties:
+        status: {type: string, enum: [final]}
+        elected_ids:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: {type: integer}
+        valid_votes: {type: integer, minimum: 1}
+        counts:
+          type: object
+          description: Own-round aggregate nominal votes keyed by every eligible candidacy id, including zero votes.
+          additionalProperties: {type: integer, minimum: 0}
+    RunoffRequiredResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded from a closed and reconciled first round without an absolute majority.
+        Exactly two unambiguous slates qualify; a tie at the qualifying cutoff remains
+        pending instead of selecting arbitrarily. This result does not create or open
+        the second round automatically; the creator must prepare a new calendar.
+      required: [status, reason, runoff_ids, valid_votes, counts]
+      properties:
+        status: {type: string, enum: [pending]}
+        reason: {type: string, enum: [second round required]}
+        runoff_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items: {type: integer}
+        valid_votes: {type: integer, minimum: 1}
+        counts:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
+    VotingDeviceState:
+      type: object
+      required: [state, round_state]
+      properties:
+        state:
+          type: string
+        round_state:
+          type: string
+          nullable: true
+          enum: [draft, scheduled, open, suspended, closed, annulled, null]
+          description: Latest session round state; null until the device has a session.
+        session_id:
+          type: string
+          nullable: true
+        next_stage_position:
+          type: integer
+          nullable: true
+        stage:
+          description: Next stage only for an active session in an open round of a noncancelled election; null while suspended, cancelled or inactive.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, contest, choice_index, method, candidates]
+          properties:
+            id: {type: integer}
+            contest: {type: string}
+            choice_index: {type: integer, minimum: 1}
+            method: {type: string, enum: [simple_majority, absolute_majority]}
+            candidates:
+              type: array
+              items:
+                $ref: '#/components/schemas/FrozenCandidate'
+        last_receipt_id:
+          type: string
+          format: uuid
+          nullable: true
+    ConfirmationIntent:
+      type: object
+      required: [stage_id, command_key, kind]
+      properties:
+        stage_id:
+          type: integer
+        command_key:
+          type: string
+        kind:
+          type: string
+          enum: [nominal, legend, blank, 'null']
+        candidacy_id:
+          type: integer
+        party_id:
+          type: integer
+        warning_acknowledged:
+          type: boolean
+    ConfirmationReceipt:
+      type: object
+      required: [receipt_id, status]
+      properties:
+        receipt_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [confirmed]
+        next_stage_position:
+          type: integer
+    PublicPartialResult:
+      type: object
+      additionalProperties: false
+      required: [status, round_number, contests, revision]
+      properties:
+        revision:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque equality token derived only from the public aggregate projection; not a vote sequence or timestamp. Refetch by HTTP after reconnecting and compare for equality.
+        status:
+          type: string
+          enum: [partial]
+        round_number:
+          type: integer
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPartialContest'
+    PublicPartialContest:
+      type: object
+      additionalProperties: false
+      required: [status, participation, confirmations, nominal_votes, legend_votes, blank_votes, null_votes, valid_votes, total_votes, administrative_null_votes, stages, candidates, contest_id, contest_name]
+      properties:
+        status:
+          type: string
+          enum: [partial]
+        contest_id:
+          type: integer
+        contest_name:
+          type: string
+        participation:
+          type: integer
+          minimum: 0
+          description: Started sessions in the round, not releases or votes; repeated across its contests.
+        confirmations:
+          type: integer
+          minimum: 0
+          description: Durable confirmation receipts in this contest, excluding administrative abandonment nulls.
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+          description: Voter and administrative nulls together.
+        valid_votes:
+          type: integer
+          minimum: 0
+          description: Nominal for majority; nominal plus legend for proportional contests.
+        total_votes:
+          type: integer
+          minimum: 0
+          description: All vote types across the contest stages, including administrative nulls.
+        administrative_null_votes:
+          type: integer
+          minimum: 0
+          description: Subset of null_votes originating in formal abandonment, not extra confirmations.
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartialStageTotals'
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCandidatePercentage'
+    PublicCandidatePercentage:
+      type: object
+      additionalProperties: false
+      required: [candidacy_id, name, ballot_number, votes, percentage, principal_person, principal_party]
+      properties:
+        candidacy_id:
+          type: integer
+        name:
+          type: string
+          description: Principal candidate name in the opened ballot snapshot.
+        ballot_number:
+          type: string
+          description: Frozen ballot number, preserving leading zeros.
+        principal_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        principal_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+        vice_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        vice_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+        votes:
+          type: integer
+          minimum: 0
+        percentage:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: >-
+            Nominal candidate votes divided by valid votes across all contest stages,
+            multiplied by 100 and rounded to two decimals. Legend is included in the
+            proportional denominator; blank and null are excluded. Null when valid
+            votes are zero; the frontend displays a dash rather than zero percent.
+    PartialStageTotals:
+      type: object
+      additionalProperties: false
+      required: [stage_id, choice_index, nominal_votes, legend_votes, blank_votes, null_votes, administrative_null_votes, total_votes]
+      properties:
+        stage_id:
+          type: integer
+        choice_index:
+          type: integer
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+        administrative_null_votes:
+          type: integer
+          minimum: 0
+        total_votes:
+          type: integer
+          minimum: 0
+    PublishedReport:
+      type: object
+      additionalProperties: false
+      description: Immutable aggregate version; publication time is not a voting timestamp.
+      required: [status, election_id, election_title, rounds, outcomes, occurrences, version, previous_version, published_at, input_digest]
+      properties:
+        status: {type: string, enum: [final]}
+        election_id: {type: integer}
+        election_title: {type: string}
+        version: {type: integer, minimum: 1}
+        previous_version: {type: integer, minimum: 1, nullable: true}
+        published_at: {type: string, format: date-time}
+        input_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+        rounds: {type: array, items: {$ref: '#/components/schemas/ReportRound'}}
+        outcomes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [contest_id, deciding_round, elected_ids]
+            properties:
+              contest_id: {type: integer}
+              deciding_round: {type: integer, minimum: 1}
+              elected_ids: {type: array, items: {type: integer}}
+        occurrences: {type: array, items: {$ref: '#/components/schemas/ReportOccurrence'}}
+    ReportStatus:
+      type: object
+      additionalProperties: false
+      required: [status, election_id, reason]
+      properties:
+        status: {type: string, enum: [pending, annulled]}
+        election_id: {type: integer}
+        reason: {type: string}
+    ReportRound:
+      type: object
+      additionalProperties: false
+      required: [round_number, snapshot_digest, configuration, contests]
+      properties:
+        round_number: {type: integer, minimum: 1}
+        snapshot_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+        configuration: {$ref: '#/components/schemas/ReportConfiguration'}
+        contests: {type: array, items: {$ref: '#/components/schemas/ReportContest'}}
+    ReportContest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Own-round counts and recorded calculation memory, including QE/QP, exact
+        averages and seats for proportional contests. A first-round runoff_required
+        memory is preserved; final winners are given by the report outcomes.
+      required: [contest_id, contest_name, status, rule_version, input_digest, result, candidates, totals, legends]
+      properties:
+        contest_id: {type: integer}
+        contest_name: {type: string}
+        status: {type: string, enum: [final, pending]}
+        rule_version: {type: string}
+        input_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+        result: {$ref: '#/components/schemas/RecordedContestResult/properties/result'}
+        candidates: {type: array, items: {$ref: '#/components/schemas/FrozenCandidate'}}
+        totals: {$ref: '#/components/schemas/ReportTotals'}
+        legends:
+          type: array
+          description: Per-party legend counts, including zero; empty for majority methods.
+          items:
+            type: object
+            additionalProperties: false
+            required: [party_id, number, name, abbreviation, votes]
+            properties:
+              party_id: {type: integer}
+              number: {type: string}
+              name: {type: string}
+              abbreviation: {type: string}
+              votes: {type: integer, minimum: 0}
+    ReportTotals:
+      type: object
+      additionalProperties: false
+      required: [status, participation, confirmations, nominal_votes, legend_votes, blank_votes, null_votes, valid_votes, total_votes, administrative_null_votes, stages, candidates]
+      properties:
+        status: {type: string, enum: [final]}
+        participation: {type: integer, minimum: 0}
+        confirmations: {type: integer, minimum: 0}
+        nominal_votes: {type: integer, minimum: 0}
+        legend_votes: {type: integer, minimum: 0}
+        blank_votes: {type: integer, minimum: 0}
+        null_votes: {type: integer, minimum: 0}
+        valid_votes: {type: integer, minimum: 0}
+        total_votes: {type: integer, minimum: 0}
+        administrative_null_votes: {type: integer, minimum: 0}
+        stages: {type: array, items: {$ref: '#/components/schemas/PartialStageTotals'}}
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [candidacy_id, votes, percentage]
+            properties:
+              candidacy_id: {type: integer}
+              votes: {type: integer, minimum: 0}
+              percentage: {type: number, minimum: 0, maximum: 100, nullable: true}
+    ReportOccurrence:
+      type: object
+      additionalProperties: false
+      required: [round_number, kind, count]
+      properties:
+        round_number: {type: integer, minimum: 1}
+        kind: {type: string}
+        count: {type: integer, minimum: 1}
+    ReportConfiguration:
+      type: object
+      additionalProperties: false
+      required: [round_number, rule_version, schedule, parties, federations, contests]
+      properties:
+        round_number: {type: integer, minimum: 1}
+        rule_version: {type: string}
+        schedule:
+          type: object
+          additionalProperties: false
+          required: [opens_at, closes_at, grace_until, timezone]
+          properties:
+            opens_at: {type: string, format: date-time}
+            closes_at: {type: string, format: date-time}
+            grace_until: {type: string, format: date-time}
+            timezone: {type: string}
+        parties: {type: array, items: {$ref: '#/components/schemas/FrozenPartyIdentity'}}
+        federations:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, abbreviation, state, party_ids]
+            properties:
+              id: {type: integer}
+              name: {type: string}
+              abbreviation: {type: string, nullable: true}
+              state: {type: string, enum: [active, inactive]}
+              party_ids: {type: array, items: {type: integer}}
+        contests:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, position, method, rule_version, has_vice, seats, choices_per_person, candidacies]
+            properties:
+              id: {type: integer}
+              name: {type: string}
+              position: {type: integer, minimum: 1}
+              method: {type: string, enum: [simple_majority, absolute_majority, proportional]}
+              rule_version: {type: string}
+              has_vice: {type: boolean}
+              seats: {type: integer, minimum: 1}
+              choices_per_person: {type: integer, minimum: 1}
+              candidacies:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [id, number, party_id, principal_person]
+                  properties:
+                    id: {type: integer}
+                    number: {type: string}
+                    party_id: {type: integer}
+                    vice_party_id: {type: integer, nullable: true}
+                    principal_person: {$ref: '#/components/schemas/FrozenPersonIdentity'}
+                    vice_person: {$ref: '#/components/schemas/FrozenPersonIdentity'}
+
+    RecordedRoundResult:
+      type: object
+      additionalProperties: false
+      required: [status, round_number, contests]
+      properties:
+        status:
+          type: string
+          enum: [final, pending]
+        round_number:
+          type: integer
+        contests:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordedContestResult'
+    RecordedContestResult:
+      type: object
+      additionalProperties: false
+      required: [contest_id, contest_name, status, rule_version, input_digest, result, candidates]
+      properties:
+        contest_id:
+          type: integer
+        contest_name:
+          type: string
+        status:
+          type: string
+          enum: [final, pending]
+        rule_version:
+          type: string
+        input_digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrozenCandidate'
+        result:
+          anyOf:
+            - $ref: '#/components/schemas/SimpleMajorityFinal'
+            - $ref: '#/components/schemas/AbsoluteMajorityFinal'
+            - $ref: '#/components/schemas/RunoffRequiredResult'
+            - $ref: '#/components/schemas/ProportionalInitialResult'
+            - $ref: '#/components/schemas/ProportionalResult'
+            - $ref: '#/components/schemas/PendingTallyResult'
+    SimpleMajorityFinal:
+      type: object
+      additionalProperties: false
+      required: [status, elected_ids, valid_votes, counts]
+      properties:
+        status:
+          type: string
+          enum: [final]
+        elected_ids:
+          type: array
+          items:
+            type: integer
+        valid_votes:
+          type: integer
+          minimum: 1
+        counts:
+          type: object
+          description: Aggregate nominal votes keyed by candidacy id.
+          additionalProperties:
+            type: integer
+            minimum: 1
+    ProportionalInitialResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded initial proportional allocation from F10a, retained for historical runs.
+        F10b records complete allocations in ProportionalResult. Initial ids describe occupied QP seats.
+        Unallocated seats cannot exceed seats. Zero QE is never used as a divisor.
+      required: [algorithm_version, status, reason, seats, valid_votes, nominal_votes, legend_votes, blank_votes, null_votes, qe, units, unallocated_seats]
+      properties:
+        algorithm_version:
+          type: string
+          enum: [proporcional_br_2026_v1]
+        status:
+          type: string
+          enum: [pending]
+        reason:
+          type: string
+        seats:
+          type: integer
+          minimum: 1
+        valid_votes:
+          type: integer
+          minimum: 0
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        blank_votes:
+          type: integer
+          minimum: 0
+        null_votes:
+          type: integer
+          minimum: 0
+        qe:
+          type: integer
+          minimum: 0
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProportionalInitialUnit'
+        unallocated_seats:
+          type: integer
+          minimum: 0
+    ProportionalInitialUnit:
+      type: object
+      additionalProperties: false
+      description: >-
+        Aggregate party or federation calculation. QP records seats obtained;
+        initial_ids records those occupied, and unfilled_qp_seats records the difference.
+        Candidate counts are nominal only; legend votes are assigned to the unit.
+      required: [kind, id, party_ids, nominal_votes, legend_votes, votes, qp, candidates, initial_ids, unfilled_qp_seats]
+      properties:
+        kind:
+          type: string
+          enum: [party, federation]
+        id:
+          type: integer
+          minimum: 1
+        party_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        nominal_votes:
+          type: integer
+          minimum: 0
+        legend_votes:
+          type: integer
+          minimum: 0
+        votes:
+          type: integer
+          minimum: 0
+        qp:
+          type: integer
+          minimum: 0
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, party_id, votes]
+            properties:
+              id:
+                type: integer
+                minimum: 1
+              party_id:
+                type: integer
+                minimum: 1
+              votes:
+                type: integer
+                minimum: 0
+        initial_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        unfilled_qp_seats:
+          type: integer
+          minimum: 0
+    PendingTallyResult:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [pending]
+        reason:
+          type: string
+    ProportionalResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Complete QE/QP and exact remainder memory under the 2026 rules. elected_ids appears
+        only in a final result. Pending results preserve verified allocated_ids and a reason;
+        age-dependent ties, zero QE and insufficient candidates never invent a winner.
+        obtained_seats includes unfilled QP seats when computing each next denominator.
+      required: [algorithm_version, status, seats, valid_votes, nominal_votes, legend_votes, blank_votes, null_votes, qe, units, unallocated_seats, allocated_ids, allocation_steps]
+      properties:
+        algorithm_version: {type: string, enum: [proporcional_br_2026_v1]}
+        status: {type: string, enum: [final, pending]}
+        reason: {type: string}
+        seats: {type: integer, minimum: 1}
+        valid_votes: {type: integer, minimum: 0}
+        nominal_votes: {type: integer, minimum: 0}
+        legend_votes: {type: integer, minimum: 0}
+        blank_votes: {type: integer, minimum: 0}
+        null_votes: {type: integer, minimum: 0}
+        qe: {type: integer, minimum: 0}
+        units: {type: array, items: {$ref: '#/components/schemas/ProportionalUnit'}}
+        unallocated_seats: {type: integer, minimum: 0}
+        allocated_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        elected_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        allocation_steps: {type: array, items: {$ref: '#/components/schemas/ProportionalAllocationStep'}}
+    ProportionalUnit:
+      type: object
+      additionalProperties: false
+      required: [kind, id, party_ids, nominal_votes, legend_votes, votes, qp, candidates, initial_ids, unfilled_qp_seats, remainder_ids, remainder_seats_obtained, obtained_seats, occupied_seats]
+      properties:
+        kind: {type: string, enum: [party, federation]}
+        id: {type: integer, minimum: 1}
+        party_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        nominal_votes: {type: integer, minimum: 0}
+        legend_votes: {type: integer, minimum: 0}
+        votes: {type: integer, minimum: 0}
+        qp: {type: integer, minimum: 0}
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, party_id, votes]
+            properties:
+              id: {type: integer, minimum: 1}
+              party_id: {type: integer, minimum: 1}
+              votes: {type: integer, minimum: 0}
+        initial_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        unfilled_qp_seats: {type: integer, minimum: 0}
+        remainder_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        remainder_seats_obtained: {type: integer, minimum: 0}
+        obtained_seats: {type: integer, minimum: 0}
+        occupied_seats: {type: integer, minimum: 0}
+    ProportionalAllocationStep:
+      type: object
+      additionalProperties: false
+      required: [seat_number, phase, eligible, selected_unit, candidate_id, tiebreak, outcome]
+      properties:
+        seat_number: {type: integer, minimum: 1}
+        phase: {type: string, enum: [restricted, remaining]}
+        eligible: {type: array, items: {$ref: '#/components/schemas/ProportionalAverage'}}
+        selected_unit:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind: {type: string, enum: [party, federation]}
+            id: {type: integer, minimum: 1}
+        candidate_id: {type: integer, minimum: 1, nullable: true}
+        tiebreak: {type: string, enum: [none, unit_votes, candidate_votes]}
+        outcome: {type: string, enum: [allocated, pending]}
+    ProportionalAverage:
+      type: object
+      additionalProperties: false
+      required: [kind, id, numerator, denominator, candidate_votes, candidate_ids]
+      properties:
+        kind: {type: string, enum: [party, federation]}
+        id: {type: integer, minimum: 1}
+        numerator: {type: integer, minimum: 0}
+        denominator: {type: integer, minimum: 1}
+        candidate_votes: {type: integer, minimum: 0}
+        candidate_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
