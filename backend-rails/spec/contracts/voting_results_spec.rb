@@ -37,8 +37,10 @@ RSpec.describe 'API v1 partial and recorded results contract' do
 
   it 'uses frozen public candidate labels and a nullable percentage for a zero valid denominator' do
     candidate = schemas.fetch('PublicCandidatePercentage')
-    expect(candidate.fetch('properties').keys).to match_array(%w[candidacy_id name ballot_number votes percentage])
-    expect(candidate.fetch('required')).to match_array(candidate.fetch('properties').keys)
+    expect(candidate.fetch('properties').keys)
+      .to match_array(%w[candidacy_id name ballot_number votes percentage principal_person principal_party vice_person vice_party])
+    expect(candidate.fetch('required'))
+      .to match_array(%w[candidacy_id name ballot_number votes percentage principal_person principal_party])
     expect(candidate.dig('properties', 'ballot_number', 'type')).to eq('string')
     percentage = candidate.fetch('properties').fetch('percentage')
     expect(percentage).to include('type' => 'number', 'nullable' => true, 'minimum' => 0, 'maximum' => 100)
@@ -73,9 +75,11 @@ RSpec.describe 'API v1 partial and recorded results contract' do
     expect(result.dig('properties', 'status', 'enum')).to match_array(%w[final pending])
     expect(result.dig('properties', 'contests', 'items', '$ref')).to eq('#/components/schemas/RecordedContestResult')
     contest = schemas.fetch('RecordedContestResult')
-    expect(contest.fetch('properties').keys).to match_array(%w[contest_id contest_name status rule_version input_digest result])
-    expect(contest.dig('properties', 'result', 'oneOf')).to match_array([
+    expect(contest.fetch('properties').keys).to match_array(%w[contest_id contest_name status rule_version input_digest result candidates])
+    expect(contest.dig('properties', 'result', 'anyOf')).to match_array([
       { '$ref' => '#/components/schemas/SimpleMajorityFinal' },
+      { '$ref' => '#/components/schemas/AbsoluteMajorityFinal' },
+      { '$ref' => '#/components/schemas/RunoffRequiredResult' },
       { '$ref' => '#/components/schemas/PendingTallyResult' }
     ])
     expect(schemas.fetch('SimpleMajorityFinal').fetch('required')).to match_array(%w[status elected_ids valid_votes counts])

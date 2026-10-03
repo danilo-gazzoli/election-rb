@@ -851,13 +851,80 @@ paths:
         default:
           $ref: '#/components/responses/ApiError'
 
+  /api/v1/admin/rounds/{id}/runoff:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    post:
+      operationId: prepareRunoff
+      summary: Prepare only the unresolved absolute majority contests for round two
+      description: >-
+        Requires the active election creator and a closed, reconciled first round with
+        a frozen ballot and matching recorded tally. Opens on a later local day using
+        the first ballot timezone, after its grace deadline, with a future opening and
+        closing after opening. Only two unambiguously qualified slates per unresolved
+        contest are retained. The same calendar replays the prepared round without
+        creating another round or audit; a different calendar conflicts. First-round
+        votes and winners are preserved and are never transferred to the second round.
+        Preparation does not open voting; use the existing open operation at its window.
+      x-implementation-status: implemented
+      x-authentication: creator-session-with-csrf
+      x-rate-limits:
+        - {scope: operator_commands, identity: user, attempts: 60, window_seconds: 60}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunoffPreparationRequest'
+      responses:
+        '201':
+          description: New scheduled second round and qualified contests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunoffPreparationResult'
+        '200':
+          description: Replay of the existing round with the same calendar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunoffPreparationResult'
+        '401':
+          $ref: '#/components/responses/ApiError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ApiError'
+        '409':
+          description: runoff_conflict for a different prepared calendar; runoff_prepare_denied for an unavailable source round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: invalid_runoff_calendar or invalid_runoff_configuration; no round is prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/AuthenticationUnavailable'
+
   /api/v1/admin/rounds/{id}/open:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
     post:
       operationId: openRound
       summary: Freeze a valid round configuration and open consecutive voting stages
-      description: Only simple_majority is currently available for voting. Draft absolute_majority and proportional contests are permitted, but preview returns unavailable_method and opening rejects them until their tally features are implemented.
+      description: >-
+        simple_majority and absolute_majority are available. Proportional contests may
+        be saved as drafts, but preview reports unavailable_method and opening rejects
+        them. Round two must be prepared from a closed, reconciled first round; opening
+        freezes only its qualified contests and slates with a new calendar and stages.
+      x-available-methods: [simple_majority, absolute_majority]
+      x-unavailable-methods: [proportional]
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       x-rate-limits:
@@ -2203,6 +2270,133 @@ components:
         state:
           type: string
           enum: [released, in_progress, completed, abandoned, cancelled]
+    RunoffPreparationRequest:
+      type: object
+      required: [opens_at, closes_at]
+      properties:
+        opens_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$'
+        closes_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$'
+    RunoffPreparationResult:
+      type: object
+      additionalProperties: false
+      required: [source_round_id, round, contests]
+      properties:
+        source_round_id: {type: integer}
+        round:
+          $ref: '#/components/schemas/PreparedRunoffRound'
+        contests:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RunoffContest'
+    PreparedRunoffRound:
+      type: object
+      additionalProperties: false
+      required: [id, number, state, opens_at, closes_at, grace_until]
+      properties:
+        id: {type: integer}
+        number: {type: integer, enum: [2]}
+        state: {type: string, enum: [scheduled, open, suspended, closed, annulled]}
+        opens_at: {type: string, format: date-time}
+        closes_at: {type: string, format: date-time}
+        grace_until: {type: string, format: date-time}
+    RunoffContest:
+      type: object
+      additionalProperties: false
+      required: [contest_id, candidacy_ids]
+      properties:
+        contest_id: {type: integer}
+        candidacy_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items: {type: integer}
+    FrozenPersonIdentity:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    FrozenPartyIdentity:
+      type: object
+      additionalProperties: false
+      required: [id, number, name, abbreviation]
+      properties:
+        id: {type: integer}
+        number: {type: string}
+        name: {type: string}
+        abbreviation: {type: string}
+    FrozenCandidate:
+      type: object
+      additionalProperties: false
+      description: >-
+        Public slate identity from the opened snapshot, with one nominal vote for the
+        whole slate. Vice fields are omitted for contests without a vice. Principal and
+        vice may belong to distinct parties; neither has a separate vote in this slate.
+      required: [id, number, name, principal_person, principal_party]
+      properties:
+        id: {type: integer}
+        number: {type: string}
+        name: {type: string}
+        principal_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        principal_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+        vice_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        vice_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+    AbsoluteMajorityFinal:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded only after closing and reconciliation. In round one, 2 * winner votes
+        must exceed total nominal votes; blank and null votes are excluded. In the second
+        round, the higher own-round nominal total wins. A decisive tie, zero nominal
+        votes or insufficient eligible candidacies remain pending with no invented winner.
+      required: [status, elected_ids, valid_votes, counts]
+      properties:
+        status: {type: string, enum: [final]}
+        elected_ids:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: {type: integer}
+        valid_votes: {type: integer, minimum: 1}
+        counts:
+          type: object
+          description: Own-round aggregate nominal votes keyed by every eligible candidacy id, including zero votes.
+          additionalProperties: {type: integer, minimum: 0}
+    RunoffRequiredResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Recorded from a closed and reconciled first round without an absolute majority.
+        Exactly two unambiguous slates qualify; a tie at the qualifying cutoff remains
+        pending instead of selecting arbitrarily. This result does not create or open
+        the second round automatically; the creator must prepare a new calendar.
+      required: [status, reason, runoff_ids, valid_votes, counts]
+      properties:
+        status: {type: string, enum: [pending]}
+        reason: {type: string, enum: [second round required]}
+        runoff_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items: {type: integer}
+        valid_votes: {type: integer, minimum: 1}
+        counts:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
     VotingDeviceState:
       type: object
       required: [state, round_state]
@@ -2224,6 +2418,17 @@ components:
           description: Next stage only for an active session in an open round of a noncancelled election; null while suspended, cancelled or inactive.
           type: object
           nullable: true
+          additionalProperties: false
+          required: [id, contest, choice_index, method, candidates]
+          properties:
+            id: {type: integer}
+            contest: {type: string}
+            choice_index: {type: integer, minimum: 1}
+            method: {type: string, enum: [simple_majority, absolute_majority]}
+            candidates:
+              type: array
+              items:
+                $ref: '#/components/schemas/FrozenCandidate'
         last_receipt_id:
           type: string
           format: uuid
@@ -2331,7 +2536,7 @@ components:
     PublicCandidatePercentage:
       type: object
       additionalProperties: false
-      required: [candidacy_id, name, ballot_number, votes, percentage]
+      required: [candidacy_id, name, ballot_number, votes, percentage, principal_person, principal_party]
       properties:
         candidacy_id:
           type: integer
@@ -2341,6 +2546,14 @@ components:
         ballot_number:
           type: string
           description: Frozen ballot number, preserving leading zeros.
+        principal_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        principal_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
+        vice_person:
+          $ref: '#/components/schemas/FrozenPersonIdentity'
+        vice_party:
+          $ref: '#/components/schemas/FrozenPartyIdentity'
         votes:
           type: integer
           minimum: 0
@@ -2398,7 +2611,7 @@ components:
     RecordedContestResult:
       type: object
       additionalProperties: false
-      required: [contest_id, contest_name, status, rule_version, input_digest, result]
+      required: [contest_id, contest_name, status, rule_version, input_digest, result, candidates]
       properties:
         contest_id:
           type: integer
@@ -2412,9 +2625,15 @@ components:
         input_digest:
           type: string
           pattern: '^[0-9a-f]{64}$'
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrozenCandidate'
         result:
-          oneOf:
+          anyOf:
             - $ref: '#/components/schemas/SimpleMajorityFinal'
+            - $ref: '#/components/schemas/AbsoluteMajorityFinal'
+            - $ref: '#/components/schemas/RunoffRequiredResult'
             - $ref: '#/components/schemas/PendingTallyResult'
     SimpleMajorityFinal:
       type: object
