@@ -36,13 +36,15 @@ module Voting
                      SimpleMajorityTally.call(round_contest: round_contest)
                    elsif contest.method == 'absolute_majority'
                      AbsoluteMajorityTally.call(round_contest: round_contest)
+                   elsif contest.method == 'proportional'
+                     ProportionalInitialTally.call(round_contest: round_contest)
                    else
                      { status: 'pending', reason: 'tally method is not implemented' }
                    end
           aggregate = CastVote.where(round_id: round.id, contest_id: contest.id)
                               .group(:voting_stage_id, :kind, :origin, :candidacy_id, :party_id).count
           input = aggregate.sort_by { |key, _| key.map(&:to_s).join(':') }
-          TallyRun.create!(round_contest: round_contest, algorithm_version: contest.rule_version,
+          TallyRun.create!(round_contest: round_contest, algorithm_version: result.fetch(:algorithm_version, contest.rule_version),
                            input_digest: Digest::SHA256.hexdigest(JSON.generate(input)),
                            state: result.fetch(:status), totals: result,
                            calculation: { vote_groups: input, reconciliation: reconciliation }, created_at: now)
