@@ -52,6 +52,8 @@ module Voting
       unless election.canceled?
         round = election.rounds.where(state: %w[open suspended]).order(number: :desc).first
         return PublicPartialResult.call(round: round).fetch(:revision) if round
+        report = ReportVersion.where(election: election).order(:version).last
+        return report.input_digest if report && election.rounds.where.not(state: 'closed').none?
       end
       unavailable_revision(election_id)
     rescue PublicPartialResult::NotAvailable

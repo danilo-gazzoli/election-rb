@@ -4,6 +4,15 @@ module Api
   module V1
     module Public
       class ElectionsController < BaseController
+        def report
+          election = Election.find(params[:id])
+          render json: ::Voting::PublicReport.call(election: election, version: params[:version])
+        rescue ActiveRecord::RecordNotFound
+          render_api_error(code: 'not_found', message: 'Election not found', status: :not_found)
+        rescue ::Voting::PublicReport::NotAvailable => error
+          render_api_error(code: 'report_not_found', message: error.message, status: :not_found)
+        end
+
         def partial
           election = Election.find(params[:id])
           return render_api_error(code: 'not_available', message: 'Election is cancelled',
