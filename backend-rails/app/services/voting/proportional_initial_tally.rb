@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Voting
-  # Reads reconciled votes and frozen configuration; never publishes final winners.
+  # Reads reconciled votes and frozen configuration; calculator selects initial or complete allocation.
   class ProportionalInitialTally
-    def self.call(round_contest:)
+    def self.call(round_contest:, calculator: ProportionalCore)
       round = round_contest.round.reload
       return pending('election is cancelled', status: 'annulled') if round.election.reload.canceled?
       return pending('round is annulled', status: 'annulled') if round.state == 'annulled'
@@ -40,7 +40,7 @@ module Voting
         federations = data.fetch('federations', []).select { |federation| federation['state'] == 'active' }.map do |federation|
           { id: federation.fetch('id'), party_ids: federation.fetch('party_ids') }
         end
-        result = ProportionalCore.call(seats: contest.fetch('seats'), parties: parties,
+        result = calculator.call(seats: contest.fetch('seats'), parties: parties,
                                        candidates: candidates, federations: federations,
                                        blank_votes: kinds.fetch('blank', 0), null_votes: kinds.fetch('null', 0))
       rescue ArgumentError, KeyError

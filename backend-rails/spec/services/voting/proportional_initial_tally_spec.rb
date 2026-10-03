@@ -3,7 +3,7 @@
 require 'rails_helper'
 require 'digest'
 
-# Isolated proportional fixture: production opening stays unavailable until F10b.
+# Isolated snapshot fixture for the initial reader; production opening is tested separately.
 RSpec.describe Voting::ProportionalInitialTally do
   include_context 'an absolute majority tally round'
 
@@ -122,11 +122,11 @@ RSpec.describe Voting::ProportionalInitialTally do
     expect(initial_tally.fetch(:valid_votes)).to eq(4)
   end
 
-  it 'records initial calculation and algorithm version through the existing round closing flow' do
+  it 'records complete calculation and algorithm version through the existing round closing flow' do
     counts_for(3, 1, 0)
     Voting::CloseRound.call(round: round, actor: creator, now: round.grace_until + 1.second)
     recorded = TallyRun.find_by!(round_contest: round_contest)
-    expect(recorded).to have_attributes(state: 'pending', algorithm_version: 'proporcional_br_2026_v1')
+    expect(recorded).to have_attributes(state: 'final', algorithm_version: 'proporcional_br_2026_v1')
     expect(recorded.totals).to include('qe' => 2, 'valid_votes' => 4)
     expect(recorded.input_digest).to match(/\A[0-9a-f]{64}\z/)
   end

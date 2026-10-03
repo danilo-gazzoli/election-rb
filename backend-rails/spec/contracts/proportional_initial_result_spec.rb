@@ -42,8 +42,8 @@ RSpec.describe 'API v1 proportional initial calculation contract' do
     expect(properties.keys).not_to include('elected_ids', 'session_id', 'receipt_id', 'credential')
   end
 
-  it 'keeps production proportional opening unavailable until remainder allocation is delivered' do
+  it 'enables production proportional opening after remainder allocation is delivered' do
     opening = document.fetch('paths').fetch('/api/v1/admin/rounds/{id}/open').fetch('post')
-    expect(opening.fetch('x-unavailable-methods')).to include('proportional')
+    expect(opening.fetch('x-available-methods')).to include('proportional')
   end
 end

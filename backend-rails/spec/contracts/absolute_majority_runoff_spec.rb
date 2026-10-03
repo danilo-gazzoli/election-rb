@@ -106,6 +106,7 @@ RSpec.describe 'API v1 absolute majority and runoff contract' do
       { '$ref' => '#/components/schemas/AbsoluteMajorityFinal' },
       { '$ref' => '#/components/schemas/RunoffRequiredResult' },
       { '$ref' => '#/components/schemas/ProportionalInitialResult' },
+      { '$ref' => '#/components/schemas/ProportionalResult' },
       { '$ref' => '#/components/schemas/PendingTallyResult' }
     ])
     final = schemas.fetch('AbsoluteMajorityFinal')
@@ -132,9 +133,9 @@ RSpec.describe 'API v1 absolute majority and runoff contract' do
     expect(pending).to match(/not.*automatically/i)
   end
 
-  it 'reports absolute majority as available while proportional tally remains unavailable' do
+  it 'reports absolute majority as available alongside proportional tally' do
     opening = document.dig('paths', '/api/v1/admin/rounds/{id}/open', 'post')
-    expect(opening.fetch('x-available-methods')).to match_array(%w[simple_majority absolute_majority])
-    expect(opening.fetch('x-unavailable-methods')).to eq(['proportional'])
+    expect(opening.fetch('x-available-methods')).to match_array(%w[simple_majority absolute_majority proportional])
+    expect(opening.fetch('x-unavailable-methods')).to eq([])
   end
 end
