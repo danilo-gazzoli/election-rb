@@ -919,12 +919,12 @@ paths:
       operationId: openRound
       summary: Freeze a valid round configuration and open consecutive voting stages
       description: >-
-        simple_majority and absolute_majority are available. Proportional contests may
-        be saved as drafts, but preview reports unavailable_method and opening rejects
-        them. Round two must be prepared from a closed, reconciled first round; opening
+        simple_majority, absolute_majority and proportional are available. Proportional
+        contests require proporcional_br_2026_v1; unsupported versions are rejected
+        before opening. Round two must be prepared from a closed, reconciled first round; opening
         freezes only its qualified contests and slates with a new calendar and stages.
-      x-available-methods: [simple_majority, absolute_majority]
-      x-unavailable-methods: [proportional]
+      x-available-methods: [simple_majority, absolute_majority, proportional]
+      x-unavailable-methods: []
       x-implementation-status: implemented
       x-authentication: creator-session-with-csrf
       x-rate-limits:
@@ -2635,6 +2635,7 @@ components:
             - $ref: '#/components/schemas/AbsoluteMajorityFinal'
             - $ref: '#/components/schemas/RunoffRequiredResult'
             - $ref: '#/components/schemas/ProportionalInitialResult'
+            - $ref: '#/components/schemas/ProportionalResult'
             - $ref: '#/components/schemas/PendingTallyResult'
     SimpleMajorityFinal:
       type: object
@@ -2661,8 +2662,8 @@ components:
       type: object
       additionalProperties: false
       description: >-
-        Recorded initial proportional allocation, pending until F10b completes remainder
-        distribution. Initial ids describe occupied QP seats, not published final winners.
+        Recorded initial proportional allocation from F10a, retained for historical runs.
+        F10b records complete allocations in ProportionalResult. Initial ids describe occupied QP seats.
         Unallocated seats cannot exceed seats. Zero QE is never used as a divisor.
       required: [algorithm_version, status, reason, seats, valid_votes, nominal_votes, legend_votes, blank_votes, null_votes, qe, units, unallocated_seats]
       properties:
@@ -2770,3 +2771,86 @@ components:
           enum: [pending]
         reason:
           type: string
+    ProportionalResult:
+      type: object
+      additionalProperties: false
+      description: >-
+        Complete QE/QP and exact remainder memory under the 2026 rules. elected_ids appears
+        only in a final result. Pending results preserve verified allocated_ids and a reason;
+        age-dependent ties, zero QE and insufficient candidates never invent a winner.
+        obtained_seats includes unfilled QP seats when computing each next denominator.
+      required: [algorithm_version, status, seats, valid_votes, nominal_votes, legend_votes, blank_votes, null_votes, qe, units, unallocated_seats, allocated_ids, allocation_steps]
+      properties:
+        algorithm_version: {type: string, enum: [proporcional_br_2026_v1]}
+        status: {type: string, enum: [final, pending]}
+        reason: {type: string}
+        seats: {type: integer, minimum: 1}
+        valid_votes: {type: integer, minimum: 0}
+        nominal_votes: {type: integer, minimum: 0}
+        legend_votes: {type: integer, minimum: 0}
+        blank_votes: {type: integer, minimum: 0}
+        null_votes: {type: integer, minimum: 0}
+        qe: {type: integer, minimum: 0}
+        units: {type: array, items: {$ref: '#/components/schemas/ProportionalUnit'}}
+        unallocated_seats: {type: integer, minimum: 0}
+        allocated_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        elected_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        allocation_steps: {type: array, items: {$ref: '#/components/schemas/ProportionalAllocationStep'}}
+    ProportionalUnit:
+      type: object
+      additionalProperties: false
+      required: [kind, id, party_ids, nominal_votes, legend_votes, votes, qp, candidates, initial_ids, unfilled_qp_seats, remainder_ids, remainder_seats_obtained, obtained_seats, occupied_seats]
+      properties:
+        kind: {type: string, enum: [party, federation]}
+        id: {type: integer, minimum: 1}
+        party_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        nominal_votes: {type: integer, minimum: 0}
+        legend_votes: {type: integer, minimum: 0}
+        votes: {type: integer, minimum: 0}
+        qp: {type: integer, minimum: 0}
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, party_id, votes]
+            properties:
+              id: {type: integer, minimum: 1}
+              party_id: {type: integer, minimum: 1}
+              votes: {type: integer, minimum: 0}
+        initial_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        unfilled_qp_seats: {type: integer, minimum: 0}
+        remainder_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+        remainder_seats_obtained: {type: integer, minimum: 0}
+        obtained_seats: {type: integer, minimum: 0}
+        occupied_seats: {type: integer, minimum: 0}
+    ProportionalAllocationStep:
+      type: object
+      additionalProperties: false
+      required: [seat_number, phase, eligible, selected_unit, candidate_id, tiebreak, outcome]
+      properties:
+        seat_number: {type: integer, minimum: 1}
+        phase: {type: string, enum: [restricted, remaining]}
+        eligible: {type: array, items: {$ref: '#/components/schemas/ProportionalAverage'}}
+        selected_unit:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind: {type: string, enum: [party, federation]}
+            id: {type: integer, minimum: 1}
+        candidate_id: {type: integer, minimum: 1, nullable: true}
+        tiebreak: {type: string, enum: [none, unit_votes, candidate_votes]}
+        outcome: {type: string, enum: [allocated, pending]}
+    ProportionalAverage:
+      type: object
+      additionalProperties: false
+      required: [kind, id, numerator, denominator, candidate_votes, candidate_ids]
+      properties:
+        kind: {type: string, enum: [party, federation]}
+        id: {type: integer, minimum: 1}
+        numerator: {type: integer, minimum: 0}
+        denominator: {type: integer, minimum: 1}
+        candidate_votes: {type: integer, minimum: 0}
+        candidate_ids: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
