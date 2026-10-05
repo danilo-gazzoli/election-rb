@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --font-body: 1.125rem/1.5 system-ui, sans-serif;
+    --font-heading: 1.2/1.1 system-ui, sans-serif;
+  }
+  body {
+    font-size: 1.125rem;
+    line-height: 1.5;
+  }
+  h1, h2, h3 {
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  *:focus-visible {
+    outline: 4px solid #f1ab33;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-bold transition-colors
+           min-h-[52px] px-5 py-2.5 text-base disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-primary-600 text-white border-2 border-primary-600 hover:bg-primary-700;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-navy-700 border-2 border-navy-300 hover:border-navy-500;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white border-2 border-danger hover:bg-danger-dark;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-navy-500 border-2 border-transparent hover:bg-navy-50;
+  }
+  .btn-touch {
+    @apply min-h-[48px] text-lg;
+  }
+  .btn-keypad {
+    @apply min-h-[56px] text-2xl font-bold rounded-xl border-2 border-navy-200
+           bg-white text-navy-700 hover:border-primary-400 hover:bg-primary-50
+           active:bg-primary-100 touch-manipulation select-none;
+  }
+  .card {
+    @apply bg-surface border border-navy-100 rounded-2xl shadow-sm p-6;
+  }
+  .input {
+    @apply w-full min-h-[52px] rounded-xl border-2 border-navy-200 bg-white px-4 py-2.5
+           text-base text-navy-700 focus:border-primary-400 outline-none;
+  }
+  .label {
+    @apply block font-bold text-navy-600 mb-2;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-sm font-bold;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { font-size: 12pt; color: #000; background: #fff; }
+  .card { border: 1px solid #ccc; box-shadow: none; }
+}
